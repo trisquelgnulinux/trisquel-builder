@@ -1,0 +1,79 @@
+#!/bin/bash
+
+echo "Trisquel build environment setup"
+env
+case "$DIST" in
+        "belenos")
+          export UBURELEASE=trusty
+           export REVISION=7.0
+           ;;
+        "toutatis")
+           export UBURELEASE=precise
+           REVISION=6.0.1
+           ;;
+esac
+
+# sources are addedd in the slave load script
+#if ! `grep -q 'archive.ubuntu.com' /etc/apt/sources.list  `
+#  then
+#    echo "deb-src http://archive.ubuntu.com/ubuntu/ trusty main universe multiverse" >> /etc/apt/sources.list
+#  fi
+
+cat << EOF > /etc/apt/apt.conf.d/90recommends
+APT::Install-Recommends "0";
+APT::Install-Suggests "0";
+EOF
+
+#Avoid asking for modified config files
+cat << EOF > /etc/apt/apt.conf.d/40localconfig
+Dpkg::Options {
+   "--force-confdef";
+   "--force-confold";
+}
+EOF
+
+echo "force-unsafe-io" > /etc/dpkg/dpkg.cfg.d/02apt-speedup
+
+mkdir -p /etc/pkgbinarymangler/
+cat << EOF > /etc/pkgbinarymangler/striptranslations.conf
+enable: true
+components: main
+invalid_currentlybuilding: ignore
+posuffix: translations
+oem_blacklist: partner
+EOF
+
+cat << EOF > /etc/pkgbinarymangler/sanitychecks.conf
+enable: true
+EOF
+
+cat << EOF > /etc/pkgbinarymangler/maintainermangler.conf
+enable: true
+invalid_currentlybuilding: ignore
+EOF
+
+cat << EOF > /etc/pkgbinarymangler/maintainermangler.overrides
+default: Trisquel GNU/Linux developers <trisquel-devel@listas.trisquel.info>
+ignore_domains: trisquel.info sognus.com listas.trisquel.info gnu.org fsf.org
+ignore_emails: ruben@trisquel.info
+EOF
+source /etc/lsb-release
+cat <<EOF>/etc/apt/sources.list
+deb http://archive.trisquel.info/trisquel/ $DIST  main
+deb http://archive.trisquel.info/trisquel/ $DIST-updates  main
+deb http://archive.trisquel.info/trisquel/ $DIST-security  main
+EOF
+
+
+hostname devel.trisquel.info
+
+apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 40976EAF437D05B5
+apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 3B4FE6ACC0B21F32
+
+if ! [ 1$COMPONENT = "1main" ]
+then
+/bin/sed 's/^enable.*/enable: false/g' -i /etc/pkgbinarymangler/*.conf
+echo Disabled pkgbinarymangler
+fi
+
+echo $DIST-$ARCH > /etc/debian_chroot
