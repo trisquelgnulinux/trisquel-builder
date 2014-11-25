@@ -10,6 +10,10 @@ case "$DIST" in
         "toutatis")
            export UBURELEASE=precise
            REVISION=6.0.1
+	  ;;
+        "taranis")
+	   export UBURELEASE=lucid
+           REVISION=4.0
            ;;
 esac
 
@@ -59,9 +63,17 @@ ignore_emails: ruben@trisquel.info
 EOF
 source /etc/lsb-release
 cat <<EOF>/etc/apt/sources.list
+#Trisquel binary packages
 deb http://archive.trisquel.info/trisquel/ $DIST  main
 deb http://archive.trisquel.info/trisquel/ $DIST-updates  main
 deb http://archive.trisquel.info/trisquel/ $DIST-security  main
+
+#Ubuntu source packages
+deb-src http://archive.ubuntu.com/ubuntu $UBURELEASE main
+deb-src http://archive.ubuntu.com/ubuntu $UBURELEASE-updates main
+deb-src http://archive.ubuntu.com/ubuntu $UBURELEASE universe
+deb-src http://archive.ubuntu.com/ubuntu $UBURELEASE-updates universe
+
 EOF
 
 

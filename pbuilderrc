@@ -3,37 +3,38 @@
 # Version:      1.1.3
 # Licence:      GPL 2
 #
-# Description:  pbuilder settings for Tanglu distribution
-#               costumized from default pbuilderrc
+# Description:  pbuilder settings for Trisqul distribution
+#               costumized from Tanglu pbuilderrc
 #               For more infos see 'man 5 pbuilderrc'
 #
-# Author:       Thomas Funk <t.funk@web.de>    
+# Original author:       Thomas Funk <t.funk@web.de>    
+# Trisquel changes:	 Santiago Rodriguez <santi@trisquel.info>
 #
 # Created:      2014/01/31
 # Changed:      2014/06/09
 #-----------------------------------------------------------------------
 
 
-# Codenames for Tanglu suites according to their alias. Update these when
+# Codenames for Trisquel suites according to their alias. Update these when
 # needed.
 UNSTABLE_CODENAME="toutatis"
 TESTING_CODENAME="taranis"
 EXPERIMENTAL_CODENAME="brigantia"
 STABLE_CODENAME="belenos"
 
-# List of Tanglu suites.
+# List of Trisquel suites.
 TRISQUEL_SUITES=($EXPERIMENTAL_CODENAME $UNSTABLE_CODENAME $TESTING_CODENAME $STABLE_CODENAME
     "brigantia" "toutatis" "taranis" "belenos")
 
 # specifying the components of the distribution, for instance to enable all
-# components on Tanglu use "main contrib non-free"
+# components on Trisquel use "main contrib non-free"
 COMPONENTS="main"
 
 # Mirrors to use. Update these to your preferred mirror.
 TRISQUEL_MIRROR="archive.trisquel.info"
 
 # Specify the mirror site which contains the main distribution.
-MIRRORSITE=http://$TANGLU_MIRROR/tanglu
+MIRRORSITE=http://$TRISQUEL_MIRROR/trisquel
 
 # Optionally use the changelog of a package to determine the suite to use if
 # none set.
@@ -59,7 +60,7 @@ MIRRORSITE=http://$TANGLU_MIRROR/tanglu
 : ${DIST:="belenos"}
 #: ${DIST:="$(lsb_release --short --codename)"}
 
-# Optionally change Debian codenames in $DIST to their Tanglu aliases.
+# Optionally change Debian codenames in $DIST to their Trisquel aliases.
 case "$DIST" in
     experimental)
         DIST=$EXPERIMENTAL_CODENAME
@@ -173,10 +174,10 @@ HOOKDIR="/var/cache/pbuilder/hooks.d"
 
 # Specifies extra packages which the system should install in the
 # chroot on pbuilder create.
-EXTRAPACKAGES="apt-utils ccache"
+EXTRAPACKAGES="apt-utils devscripts build-essential liburi-perl python-pycurl python-setuptools pkgbinarymangler wget rpl aptitude quilt fakeroot ccache eatmydata sysv-rc dpkg sysvinit-utils upstart git libbz2-dev openjdk-7-jre openssh-client sudo debhelper quilt"
 
 # Specify the packages to be removed on creation of base.tgz
-REMOVEPACKAGES=""
+REMOVEPACKAGES="lilo"
 
 # When this value is set to yes, pdebuild will invoke debsign command
 # after building.
@@ -257,7 +258,7 @@ BUILDUSERNAME=pbuilder
 DEBOOTSTRAPOPTS=(
     '--variant=buildd'
     '--keyring' '/usr/share/keyrings/trisquel-archive-keyring.gpg'
-    '--include' 'trisquel-keyring'
+    '--include=apt'
     )
 # or unset it to make it not a buildd type.
 # unset DEBOOTSTRAPOPTS
