@@ -118,13 +118,16 @@ DISTRIBUTION="$DIST"
 
 # Specify the default directory which the build result will be copied over to after
 # the building. Specify a full-path, not a relative path.
-BUILDRESULT="/var/cache/pbuilder/$NAME/result/"
+# Use different path, because we are building user packages too
+
+: ${BUILDBRANCH:="$DIST"}
+BUILDRESULT="/var/cache/pbuilder/jenkins-repos/$BUILDBRANCH-$BUILDARCH/"
 
 # additional build results to copy out of the package build area
 #ADDITIONAL_BUILDRESULTS=(xunit.xml .coverage)
 
 # Specify the location that the packages downloaded by apt should be cached.
-APTCACHE="/var/cache/pbuilder/$NAME/aptcache/"
+APTCACHE="/var/cache/pbuilder/apt-cache/$NAME/aptcache/"
 
 # Specify using hard links in apt cache handling. Changing this
 # to "no" will disable hard linking and will copy the files.
@@ -155,6 +158,9 @@ if [ ! -d $BUILDRESULT ] ; then
 fi
 if [ ! -e $BUILDRESULT/Packages ] ; then
     touch $BUILDRESULT/Packages
+    # set permissions so I can delete files
+    chgrp sudo $BUILDRESULT/Packages
+    chmod g+rwx $BUILDRESULT/Packages
 fi
 if [ ! -e $BUILDRESULT/Release ] ; then
     cat << EOF > $BUILDRESULT/Release
