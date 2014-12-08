@@ -145,7 +145,19 @@ BUILDPLACE="/var/cache/pbuilder/build/"
 # See for more information: https://wiki.debian.org/PbuilderTricks
 
 # use previously built packages as local respository
-BINDMOUNTS="${BUILDRESULT} ${CCACHE_DIR}"
+# Also, if BUILDHELPERS exist, mount it.
+# BUILDHELPERS is the path for the helpers , and must be the same inside the chroot
+if [ x$BUILDHELPERS != x ]
+        then
+        if [ -d $BUILDHELPERS ]
+        then
+                # mount helpers inside pbuilder jail
+                BINDMOUNTS="${BUILDRESULT} ${CCACHE_DIR} ${BUILDHELPERS}"
+        fi
+        else
+                BINDMOUNTS="${BUILDRESULT} ${CCACHE_DIR}"
+fi
+
 OTHERMIRROR="deb [trusted=yes] file:$BUILDRESULT ./"
  
 # create local repository if it doesn't already exist,
