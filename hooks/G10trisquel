@@ -38,6 +38,7 @@ EOF
 
 echo "force-unsafe-io" > /etc/dpkg/dpkg.cfg.d/02apt-speedup
 
+# pkgbinarymangler
 mkdir -p /etc/pkgbinarymangler/
 cat << EOF > /etc/pkgbinarymangler/striptranslations.conf
 enable: true
@@ -61,8 +62,26 @@ default: Trisquel GNU/Linux developers <trisquel-devel@listas.trisquel.info>
 ignore_domains: trisquel.info sognus.com listas.trisquel.info gnu.org fsf.org
 ignore_emails: ruben@trisquel.info
 EOF
+
+cat << EOF > /etc/pkgbinarymangler/striptranslations.blacklist
+iso-codes
+dpkg
+language-pack.*
+debconf-i18n
+apt
+libapt-pkg.*
+libapt-inst.*
+xkb-data-i18n
+ldm
+EOF
+
+cat << EOF > /etc/pkgbinarymangler/striptfiles.conf
+enable: true
+EOF
+# end pkgbinarymangler
+
 source /etc/lsb-release
-cat <<EOF>/etc/apt/sources.list
+cat << EOF >/etc/apt/sources.list
 #Trisquel binary packages
 deb http://archive.trisquel.info/trisquel/ $DIST  main
 deb http://archive.trisquel.info/trisquel/ $DIST-updates  main
@@ -76,16 +95,28 @@ deb-src http://archive.ubuntu.com/ubuntu $UBURELEASE-updates universe
 
 EOF
 
-
-hostname devel.trisquel.info
+echo devel.trisquel.info > /etc/hostname
 
 apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 40976EAF437D05B5
 apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 3B4FE6ACC0B21F32
 
-if ! [ 1$COMPONENT = "1main" ]
-then
-/bin/sed 's/^enable.*/enable: false/g' -i /etc/pkgbinarymangler/*.conf
-echo Disabled pkgbinarymangler
+echo $DIST-$BUILDARCH > /etc/debian_chroot
+
+# Fake uname and arch outputs for i386
+if [ $BUILDARCH = "i386" ]; then
+  for BIN in /bin/uname /usr/bin/arch; do
+    mv $BIN $BIN.orig
+cat << EOF > $BIN
+#!/bin/bash
+
+if [ \$# -eq 0 ]
+then   
+        $BIN.orig | sed s/x86_64/i686/g
+else   
+        $BIN.orig "\$*" | sed s/x86_64/i686/g
+fi
+EOF
+    chmod 755 $BIN
+  done
 fi
 
-echo $DIST-$ARCH > /etc/debian_chroot
