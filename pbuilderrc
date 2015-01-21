@@ -192,7 +192,7 @@ HOOKDIR="/var/cache/pbuilder/hooks.d"
 
 # Specifies extra packages which the system should install in the
 # chroot on pbuilder create.
-EXTRAPACKAGES="apt-utils devscripts build-essential liburi-perl python-pycurl python-setuptools pkgbinarymangler wget rpl aptitude quilt fakeroot ccache eatmydata sysv-rc dpkg sysvinit-utils upstart git libbz2-dev openjdk-7-jre openssh-client sudo debhelper quilt lsb-release cdbs eatmydata parsewiki bison flex kernel-wedge"
+EXTRAPACKAGES="apt-utils devscripts build-essential liburi-perl python-pycurl python-setuptools pkgbinarymangler wget rpl aptitude quilt fakeroot ccache eatmydata sysv-rc dpkg sysvinit-utils upstart git libbz2-dev openjdk-7-jre openssh-client sudo debhelper lsb-release cdbs parsewiki bison flex kernel-wedge python3-distutils-extra gnome-pkg-tools dh-autoreconf"
 
 # Specify the packages to be removed on creation of base.tgz
 REMOVEPACKAGES="lilo"
