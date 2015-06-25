@@ -1,8 +1,8 @@
-#!/bin/bash
+#!/bin/bash -x
 
 echo "Trisquel build environment setup"
 env
-case "$DIST" in
+case "$BUILDDIST" in
         "belenos")
           export UBURELEASE=trusty
            export REVISION=7.0
@@ -10,9 +10,9 @@ case "$DIST" in
         "toutatis")
            export UBURELEASE=precise
            REVISION=6.0.1
-	  ;;
+          ;;
         "taranis")
-	   export UBURELEASE=lucid
+           export UBURELEASE=lucid
            REVISION=4.0
            ;;
 esac
@@ -36,7 +36,8 @@ Dpkg::Options {
 }
 EOF
 
-echo "force-unsafe-io" > /etc/dpkg/dpkg.cfg.d/02apt-speedup
+#echo "force-unsafe-io" > /etc/dpkg/dpkg.cfg.d/02apt-speedup
+
 
 # pkgbinarymangler
 mkdir -p /etc/pkgbinarymangler/
@@ -53,7 +54,7 @@ enable: true
 EOF
 
 cat << EOF > /etc/pkgbinarymangler/maintainermangler.conf
-enable: true
+enable: false
 invalid_currentlybuilding: ignore
 EOF
 
@@ -83,15 +84,14 @@ EOF
 source /etc/lsb-release
 cat << EOF >/etc/apt/sources.list
 #Trisquel binary packages
-deb http://archive.trisquel.info/trisquel/ $DIST  main
-deb http://archive.trisquel.info/trisquel/ $DIST-updates  main
-deb http://archive.trisquel.info/trisquel/ $DIST-security  main
+deb http://archive.trisquel.info/trisquel/ $BUILDDIST  main
+deb http://archive.trisquel.info/trisquel/ $BUILDDIST-updates  main
+deb http://archive.trisquel.info/trisquel/ $BUILDDIST-security  main
 
 #Ubuntu source packages
-deb-src http://archive.ubuntu.com/ubuntu $UBURELEASE main
-deb-src http://archive.ubuntu.com/ubuntu $UBURELEASE-updates main
-deb-src http://archive.ubuntu.com/ubuntu $UBURELEASE universe
-deb-src http://archive.ubuntu.com/ubuntu $UBURELEASE-updates universe
+deb-src http://archive.ubuntu.com/ubuntu $UBURELEASE main universe
+deb-src http://archive.ubuntu.com/ubuntu $UBURELEASE-updates main universe
+deb-src http://archive.ubuntu.com/ubuntu $UBURELEASE-security main universe
 
 EOF
 
@@ -100,21 +100,15 @@ echo devel.trisquel.info > /etc/hostname
 apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 40976EAF437D05B5
 apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 3B4FE6ACC0B21F32
 
-echo $DIST-$BUILDARCH > /etc/debian_chroot
+echo $BUILDDIST-$BUILDARCH > /etc/debian_chroot
 
-# Fake uname and arch outputs for i386
+# Fake uname and arch outputs
 if [ $BUILDARCH = "i386" ]; then
   for BIN in /bin/uname /usr/bin/arch; do
-    mv $BIN $BIN.orig
+    [ -f $BIN.orig ] || mv $BIN $BIN.orig
 cat << EOF > $BIN
 #!/bin/bash
-
-if [ \$# -eq 0 ]
-then   
-        $BIN.orig | sed s/x86_64/i686/g
-else   
-        $BIN.orig "\$*" | sed s/x86_64/i686/g
-fi
+$BIN.orig "\$@" | sed s/x86_64/i686/g
 EOF
     chmod 755 $BIN
   done
