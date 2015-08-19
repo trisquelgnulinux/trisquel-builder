@@ -85,7 +85,6 @@ source /etc/lsb-release
 cat << EOF >/etc/apt/sources.list
 #Trisquel binary packages
 deb http://archive.trisquel.info/trisquel/ $BUILDDIST  main
-deb http://archive.trisquel.info/trisquel/ $BUILDDIST-updates  main
 deb http://archive.trisquel.info/trisquel/ $BUILDDIST-security  main
 
 #Ubuntu source packages
