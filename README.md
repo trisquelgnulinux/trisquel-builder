@@ -26,15 +26,15 @@
 
 The first time you will need to create the build jails. This is a one time job that must be done for each version/arch you want to use
 
-    sudo HOME=/home/<user> DIST=belenos ARCH=amd64 pbuilder create
+    sudo HOME=/home/$USER DIST=belenos ARCH=amd64 pbuilder create
 
 If order to use the same build base for building and development, I do the following:
 
-    sudo HOME=/home/<user> DIST=belenos ARCH=amd64 pbuilder --execute --save-after-exec /bin/mkdir -p /home/<user>/package-helpers
+    sudo HOME=/home/$USER DIST=belenos ARCH=amd64 pbuilder --execute --save-after-exec /bin/mkdir -p /home/<user>/package-helpers
 
 And then, use it with:
 
-    sudo HOME=/home/<user> BUILDHELPERS=/home/<user>/package-helpers DIST=belenos ARCH=amd64 pbuilder login
+    sudo HOME=/home/$USER BUILDHELPERS=/home/<user>/package-helpers DIST=belenos ARCH=amd64 pbuilder login
 
 Where BUILDHELPERS is the place where your git checkout resides.
 
