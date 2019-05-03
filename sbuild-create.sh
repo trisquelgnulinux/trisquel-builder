@@ -35,11 +35,12 @@ CODENAME=$1
 ARCH=$2
 REPO=http://devel.trisquel.info/trisquel
 
+[ "$CODENAME" == "etiona" ] && UBURELEASE=bionic
 [ "$CODENAME" == "flidas" ] && UBURELEASE=xenial
 [ "$CODENAME" == "belenos" ] && UBURELEASE=trusty
 
 rm -rf /tmp/sbuild-create/$CODENAME-$ARCH
-debootstrap --arch=$ARCH --variant=buildd --components=main --include=apt,eatmydata $CODENAME /tmp/sbuild-create/$CODENAME-$ARCH $REPO
+debootstrap --arch=$ARCH --variant=minbase --components=main --include=apt,eatmydata $CODENAME /tmp/sbuild-create/$CODENAME-$ARCH $REPO
 
 cat << MAINEOF > /tmp/sbuild-create/$CODENAME-$ARCH/finish.sh
 #!/bin/bash
@@ -53,6 +54,8 @@ Acquire { HTTP { Proxy ""; }; };
 EOF
 fi
 
+echo "force-unsafe-io" > /etc/dpkg/dpkg.cfg.d/force-unsafe-io
+
 mkdir -p /home/jenkins
 chown 1007.1008 /home/jenkins
 
@@ -61,17 +64,15 @@ apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 40976EAF437D05B5
 apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 3B4FE6ACC0B21F32
 # Trisquel key
 apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 33C66596
+apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 0C05112F
+apt-key adv --recv-keys --keyserver keyserver.ubuntu.com FED8FD3E
 # Reload package lists
-apt-get update || true
-# Pull down signature requirements
-apt-get -y --force-yes install gnupg trisquel-keyring
-# Reload package lists
-apt-get update || true
+apt-get update
 # Disable debconf questions so that automated builds won't prompt
 echo set debconf/frontend Noninteractive | debconf-communicate
 echo set debconf/priority critical | debconf-communicate
 # Install basic build tool set, trying to match buildd
-apt-get -y --force-yes install --no-install-recommends build-essential fakeroot apt-utils pkg-create-dbgsym pkgbinarymangler apt eatmydata devscripts rpl zip unzip language-pack-en quilt openjdk-8-jre-headless wget lsb-release git vim ssh-client locales ccache cdbs python3.5
+apt-get -y --force-yes install --no-install-recommends build-essential fakeroot apt-utils pkgbinarymangler apt eatmydata devscripts zip unzip quilt default-jdk-headless wget lsb-release git vim ssh-client locales ccache cdbs python3.5
 # Set up expected /dev entries
 if [ ! -r /dev/stdin ];  then ln -sf /proc/self/fd/0 /dev/stdin;  fi
 if [ ! -r /dev/stdout ]; then ln -sf /proc/self/fd/1 /dev/stdout; fi
@@ -81,6 +82,7 @@ rm /finish.sh
 apt-get clean
 echo "dash dash/sh boolean false" | debconf-set-selections
 DEBIAN_FRONTEND=noninteractive dpkg-reconfigure dash
+sed '/backports/s/^#//' -i /etc/apt/sources.list
 MAINEOF
 
 cat << EOF > /tmp/sbuild-create/$CODENAME-$ARCH/usr/local/bin/jenkins-slave
@@ -96,9 +98,12 @@ case "\$BUILDDIST" in
         "belenos")
           export STR=c4cb30c3c8eff2742d62ffb11de3c810c0b48101a403cd078d9b970037414113
            ;;
+        "etiona")
+          export STR=05e7dcb0125bd85265bf04a57b41fa0e56eb66eab7b5f822a6a15ecf092ef772
+           ;;
 esac
 
-java -jar /var/slave.jar -jnlpUrl http://devel.trisquel.info:8085/computer/\$BUILDDIST/slave-agent.jnlp -secret "\$STR" -Dhudson.remoting.Launcher.pingIntervalSec=-1
+java -jar /var/slave.jar -jnlpUrl http://devel.trisquel.info:8085/computer/\$BUILDDIST/slave-agent.jnlp -secret "\$STR" 
 
 EOF
 chmod 755 /tmp/sbuild-create/$CODENAME-$ARCH/usr/local/bin/jenkins-slave
@@ -106,21 +111,23 @@ chmod 755 /tmp/sbuild-create/$CODENAME-$ARCH/usr/local/bin/jenkins-slave
 cat << EOF > /tmp/sbuild-create/$CODENAME-$ARCH/etc/apt/sources.list
 deb http://jenkins.trisquel.info/repos/trisquel/$CODENAME/ $CODENAME main
 deb http://jenkins.trisquel.info/repos/trisquel/$CODENAME/ $CODENAME-security main
+#deb http://jenkins.trisquel.info/repos/trisquel/$CODENAME/ $CODENAME-backports main
+deb http://jenkins.trisquel.info/repos/packages/$CODENAME/production $CODENAME main
 deb http://devel.trisquel.info/trisquel $CODENAME main
 deb http://devel.trisquel.info/trisquel $CODENAME-updates main
 deb http://devel.trisquel.info/trisquel $CODENAME-security main
-deb http://devel.trisquel.info/trisquel $CODENAME-backports main
+#deb http://devel.trisquel.info/trisquel $CODENAME-backports main
 deb-src http://devel.trisquel.info/trisquel $CODENAME main
 deb-src http://devel.trisquel.info/trisquel $CODENAME-updates main
 deb-src http://devel.trisquel.info/trisquel $CODENAME-security main
-deb-src http://devel.trisquel.info/trisquel $CODENAME-backports main
+#deb-src http://devel.trisquel.info/trisquel $CODENAME-backports main
 #Ubuntu sources (only source packages)
 deb-src http://archive.ubuntu.com/ubuntu $UBURELEASE main universe
 deb-src http://archive.ubuntu.com/ubuntu $UBURELEASE-updates main universe
 EOF
 
 mount -o bind /proc /tmp/sbuild-create/$CODENAME-$ARCH/proc
-chroot /tmp/sbuild-create/$CODENAME-$ARCH sh /finish.sh
+chroot /tmp/sbuild-create/$CODENAME-$ARCH sh -x /finish.sh
 umount /tmp/sbuild-create/$CODENAME-$ARCH/proc
 
 rm -rf /var/lib/schroot/chroots/$CODENAME-$ARCH
