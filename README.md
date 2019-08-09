@@ -26,7 +26,7 @@
 
   - Add your user to the sbuild group
 
-        sudo addgroup $USER sbuild | newgrp sbuild
+        sudo addgroup $USER sbuild && newgrp sbuild
 
 ## Creating the environment
 
