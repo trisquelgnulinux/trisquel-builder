@@ -72,7 +72,7 @@ apt-get update
 echo set debconf/frontend Noninteractive | debconf-communicate
 echo set debconf/priority critical | debconf-communicate
 # Install basic build tool set, trying to match buildd
-apt-get -y --force-yes install --no-install-recommends build-essential fakeroot apt-utils pkgbinarymangler apt eatmydata devscripts zip unzip quilt default-jdk-headless wget lsb-release git vim ssh-client locales ccache cdbs python3.5
+apt-get -y --force-yes install --no-install-recommends build-essential fakeroot apt-utils pkgbinarymangler apt eatmydata devscripts zip unzip quilt default-jdk-headless wget lsb-release git vim ssh-client locales ccache cdbs python3.5 ca-certificates
 # Set up expected /dev entries
 if [ ! -r /dev/stdin ];  then ln -sf /proc/self/fd/0 /dev/stdin;  fi
 if [ ! -r /dev/stdout ]; then ln -sf /proc/self/fd/1 /dev/stdout; fi
