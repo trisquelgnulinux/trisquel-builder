@@ -40,7 +40,7 @@ REPO=http://devel.trisquel.info/trisquel
 [ "$CODENAME" == "belenos" ] && UBURELEASE=trusty
 
 rm -rf /tmp/sbuild-create/$CODENAME-$ARCH
-debootstrap --arch=$ARCH --variant=minbase --components=main --include=apt,eatmydata $CODENAME /tmp/sbuild-create/$CODENAME-$ARCH $REPO
+debootstrap --arch=$ARCH --variant=minbase --components=main --include=apt,eatmydata,apt-utils,ca-certificate $CODENAME /tmp/sbuild-create/$CODENAME-$ARCH $REPO
 
 cat << MAINEOF > /tmp/sbuild-create/$CODENAME-$ARCH/finish.sh
 #!/bin/bash
