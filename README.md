@@ -44,4 +44,4 @@ You can upgrade the jail with this command:
 
 The binary packages can be built from a dsc by running:
 
-    sbuild -v --dist $CODENAME --arch $ARCH file.dsc 
+    sbuild -v -A --dist $CODENAME --arch $ARCH file.dsc 
