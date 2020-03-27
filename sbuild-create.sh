@@ -33,6 +33,8 @@ set -e
 
 CODENAME=$1
 ARCH=$2
+[ "$ARCH" = "i386" ] && BITS=32
+[ "$ARCH" = "amd64" ] && BITS=64
 REPO=http://devel.trisquel.info/trisquel
 
 [ "$CODENAME" == "etiona" ] && UBURELEASE=bionic
@@ -40,11 +42,13 @@ REPO=http://devel.trisquel.info/trisquel
 [ "$CODENAME" == "belenos" ] && UBURELEASE=trusty
 
 rm -rf /tmp/sbuild-create/$CODENAME-$ARCH
-debootstrap --arch=$ARCH --variant=minbase --components=main --include=apt,eatmydata,apt-utils,ca-certificates $CODENAME /tmp/sbuild-create/$CODENAME-$ARCH $REPO
+mkdir -p /tmp/sbuild-create/$CODENAME-$ARCH
+mount -t tmpfs none /tmp/sbuild-create/$CODENAME-$ARCH
+debootstrap --arch=$ARCH --variant=minbase --components=main --include=apt,eatmydata $CODENAME /tmp/sbuild-create/$CODENAME-$ARCH $REPO
 
 cat << MAINEOF > /tmp/sbuild-create/$CODENAME-$ARCH/finish.sh
 #!/bin/bash
-#set -x
+set -x
 set -e
 if [ -n "" ]; then
    mkdir -p /etc/apt/apt.conf.d/
@@ -56,8 +60,9 @@ fi
 
 echo "force-unsafe-io" > /etc/dpkg/dpkg.cfg.d/force-unsafe-io
 
-mkdir -p /home/jenkins
-chown 1007.1008 /home/jenkins
+mkdir -p /home/jenkins/.gnupg
+echo "no-use-agent" > /home/jenkins/.gnupg/gpg.conf
+chown 1007.1008 -R /home/jenkins
 
 # Install ubuntu build key
 apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 40976EAF437D05B5
@@ -72,13 +77,14 @@ apt-get update
 echo set debconf/frontend Noninteractive | debconf-communicate
 echo set debconf/priority critical | debconf-communicate
 # Install basic build tool set, trying to match buildd
-apt-get -y --force-yes install --no-install-recommends build-essential fakeroot apt-utils pkgbinarymangler apt eatmydata devscripts zip unzip quilt default-jdk-headless wget lsb-release git vim ssh-client locales ccache cdbs python3.5
+apt-get -y --force-yes install --no-install-recommends build-essential fakeroot apt-utils pkgbinarymangler apt eatmydata devscripts zip unzip quilt default-jdk-headless wget lsb-release git vim ssh-client locales ccache cdbs python3.5 gnupg2 python rename
 # Set up expected /dev entries
 if [ ! -r /dev/stdin ];  then ln -sf /proc/self/fd/0 /dev/stdin;  fi
 if [ ! -r /dev/stdout ]; then ln -sf /proc/self/fd/1 /dev/stdout; fi
 if [ ! -r /dev/stderr ]; then ln -sf /proc/self/fd/2 /dev/stderr; fi
 # Clean up
 rm /finish.sh
+apt-get -y --force-yes dist-upgrade
 apt-get clean
 echo "dash dash/sh boolean false" | debconf-set-selections
 DEBIAN_FRONTEND=noninteractive dpkg-reconfigure dash
@@ -111,16 +117,16 @@ chmod 755 /tmp/sbuild-create/$CODENAME-$ARCH/usr/local/bin/jenkins-slave
 cat << EOF > /tmp/sbuild-create/$CODENAME-$ARCH/etc/apt/sources.list
 deb http://jenkins.trisquel.info/repos/trisquel/$CODENAME/ $CODENAME main
 deb http://jenkins.trisquel.info/repos/trisquel/$CODENAME/ $CODENAME-security main
-#deb http://jenkins.trisquel.info/repos/trisquel/$CODENAME/ $CODENAME-backports main
+deb http://jenkins.trisquel.info/repos/trisquel/$CODENAME/ $CODENAME-backports main
 deb http://jenkins.trisquel.info/repos/packages/$CODENAME/production $CODENAME main
 deb http://devel.trisquel.info/trisquel $CODENAME main
 deb http://devel.trisquel.info/trisquel $CODENAME-updates main
 deb http://devel.trisquel.info/trisquel $CODENAME-security main
-#deb http://devel.trisquel.info/trisquel $CODENAME-backports main
+deb http://devel.trisquel.info/trisquel $CODENAME-backports main
 deb-src http://devel.trisquel.info/trisquel $CODENAME main
 deb-src http://devel.trisquel.info/trisquel $CODENAME-updates main
 deb-src http://devel.trisquel.info/trisquel $CODENAME-security main
-#deb-src http://devel.trisquel.info/trisquel $CODENAME-backports main
+deb-src http://devel.trisquel.info/trisquel $CODENAME-backports main
 #Ubuntu sources (only source packages)
 deb-src http://archive.ubuntu.com/ubuntu $UBURELEASE main universe
 deb-src http://archive.ubuntu.com/ubuntu $UBURELEASE-updates main universe
@@ -132,7 +138,9 @@ umount /tmp/sbuild-create/$CODENAME-$ARCH/proc
 
 rm -rf /var/lib/schroot/chroots/$CODENAME-$ARCH
 [ -d /var/lib/schroot/chroots ] || mkdir /var/lib/schroot/chroots
-mv /tmp/sbuild-create/$CODENAME-$ARCH /var/lib/schroot/chroots/$CODENAME-$ARCH
+cp -a /tmp/sbuild-create/$CODENAME-$ARCH /var/lib/schroot/chroots/$CODENAME-$ARCH
+umount /tmp/sbuild-create/$CODENAME-$ARCH
+rm -r /tmp/sbuild-create/$CODENAME-$ARCH
 
 cat << EOF > /etc/schroot/chroot.d/sbuild-$CODENAME-$ARCH
 [$CODENAME-$ARCH]
@@ -143,7 +151,9 @@ type=directory
 profile=sbuild
 union-type=overlay
 directory=/var/lib/schroot/chroots/$CODENAME-$ARCH
-command-prefix=/var/cache/ccache-sbuild/sbuild-setup,eatmydata
+command-prefix=/var/cache/ccache-sbuild/sbuild-setup,eatmydata,linux$BITS
 EOF
+
+sbuild-update -udcar $CODENAME-$ARCH
 
 echo "Setup of schroot $CODENAME-$ARCH finished successfully"
