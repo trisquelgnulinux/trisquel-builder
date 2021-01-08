@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#    Copyright (C) 2018-2019  Ruben Rodriguez <ruben@trisquel.info>
+#    Copyright (C) 2018-2021  Ruben Rodriguez <ruben@trisquel.info>
 #
 #    This program is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -35,16 +35,21 @@ CODENAME=$1
 ARCH=$2
 [ "$ARCH" = "i386" ] && BITS=32
 [ "$ARCH" = "amd64" ] && BITS=64
-REPO=http://devel.trisquel.info/trisquel
+REPO=http://archive.trisquel.org/trisquel
 
+[ "$CODENAME" == "nabia" ] && UBURELEASE=focal
 [ "$CODENAME" == "etiona" ] && UBURELEASE=bionic
 [ "$CODENAME" == "flidas" ] && UBURELEASE=xenial
 [ "$CODENAME" == "belenos" ] && UBURELEASE=trusty
 
+umount /tmp/sbuild-create/$CODENAME-$ARCH/proc || true
+umount /tmp/sbuild-create/$CODENAME-$ARCH/ || true
 rm -rf /tmp/sbuild-create/$CODENAME-$ARCH
 mkdir -p /tmp/sbuild-create/$CODENAME-$ARCH
 mount -t tmpfs none /tmp/sbuild-create/$CODENAME-$ARCH
-debootstrap --arch=$ARCH --variant=minbase --components=main --include=apt,eatmydata $CODENAME /tmp/sbuild-create/$CODENAME-$ARCH $REPO
+debootstrap --arch=$ARCH --variant=minbase --components=main --include=apt $CODENAME /tmp/sbuild-create/$CODENAME-$ARCH $REPO
+
+wget http://builds.trisquel.org/repos/signkey.asc  -O /tmp/sbuild-create/$CODENAME-$ARCH/tmp/key.asc
 
 cat << MAINEOF > /tmp/sbuild-create/$CODENAME-$ARCH/finish.sh
 #!/bin/bash
@@ -64,72 +69,64 @@ mkdir -p /home/jenkins/.gnupg
 echo "no-use-agent" > /home/jenkins/.gnupg/gpg.conf
 chown 1007.1008 -R /home/jenkins
 
-# Install ubuntu build key
+# Reload package lists
+# Install ubuntu build keys
 apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 40976EAF437D05B5
 apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 3B4FE6ACC0B21F32
-# Trisquel key
+# Trisquel keys
 apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 33C66596
 apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 0C05112F
 apt-key adv --recv-keys --keyserver keyserver.ubuntu.com FED8FD3E
-# Reload package lists
+apt-key add /tmp/key.asc && rm /tmp/key.asc
+
 apt-get update
 # Disable debconf questions so that automated builds won't prompt
 echo set debconf/frontend Noninteractive | debconf-communicate
 echo set debconf/priority critical | debconf-communicate
 # Install basic build tool set, trying to match buildd
-apt-get -y --force-yes install --no-install-recommends build-essential fakeroot apt-utils pkgbinarymangler apt eatmydata devscripts zip unzip quilt default-jdk-headless wget lsb-release git vim ssh-client locales ccache cdbs python3.5 gnupg2 python rename
+apt-get -y --force-yes install build-essential
+apt-get -y --force-yes install --no-install-recommends fakeroot apt-utils pkgbinarymangler apt devscripts zip unzip quilt wget lsb-release python
+
+
+
 # Set up expected /dev entries
 if [ ! -r /dev/stdin ];  then ln -sf /proc/self/fd/0 /dev/stdin;  fi
 if [ ! -r /dev/stdout ]; then ln -sf /proc/self/fd/1 /dev/stdout; fi
 if [ ! -r /dev/stderr ]; then ln -sf /proc/self/fd/2 /dev/stderr; fi
-# Clean up
-rm /finish.sh
+
 apt-get -y --force-yes dist-upgrade
 apt-get clean
 echo "dash dash/sh boolean false" | debconf-set-selections
 DEBIAN_FRONTEND=noninteractive dpkg-reconfigure dash
 sed '/backports/s/^#//' -i /etc/apt/sources.list
+
+# Clean up
+rm /finish.sh
+echo Finished self-setup
 MAINEOF
 
-cat << EOF > /tmp/sbuild-create/$CODENAME-$ARCH/usr/local/bin/jenkins-slave
-#!/bin/bash
-
-wget -O /var/slave.jar http://devel.trisquel.info:8085/jnlpJars/slave.jar 
-
-BUILDDIST=\$(lsb_release -cs)
-case "\$BUILDDIST" in
-        "flidas")
-          export STR=4ff092bbb47a0c7274f43bcf8b83ea7332008f7cc4caf8517312b5c4cabf2970
-           ;;
-        "belenos")
-          export STR=c4cb30c3c8eff2742d62ffb11de3c810c0b48101a403cd078d9b970037414113
-           ;;
-        "etiona")
-          export STR=05e7dcb0125bd85265bf04a57b41fa0e56eb66eab7b5f822a6a15ecf092ef772
-           ;;
-esac
-
-java -jar /var/slave.jar -jnlpUrl http://devel.trisquel.info:8085/computer/\$BUILDDIST/slave-agent.jnlp -secret "\$STR" 
-
-EOF
-chmod 755 /tmp/sbuild-create/$CODENAME-$ARCH/usr/local/bin/jenkins-slave
 
 cat << EOF > /tmp/sbuild-create/$CODENAME-$ARCH/etc/apt/sources.list
-deb http://jenkins.trisquel.info/repos/trisquel/$CODENAME/ $CODENAME main
-deb http://jenkins.trisquel.info/repos/trisquel/$CODENAME/ $CODENAME-security main
-deb http://jenkins.trisquel.info/repos/trisquel/$CODENAME/ $CODENAME-backports main
-deb http://jenkins.trisquel.info/repos/packages/$CODENAME/production $CODENAME main
-deb http://devel.trisquel.info/trisquel $CODENAME main
-deb http://devel.trisquel.info/trisquel $CODENAME-updates main
-deb http://devel.trisquel.info/trisquel $CODENAME-security main
-deb http://devel.trisquel.info/trisquel $CODENAME-backports main
-deb-src http://devel.trisquel.info/trisquel $CODENAME main
-deb-src http://devel.trisquel.info/trisquel $CODENAME-updates main
-deb-src http://devel.trisquel.info/trisquel $CODENAME-security main
-deb-src http://devel.trisquel.info/trisquel $CODENAME-backports main
+
+deb http://builds.trisquel.org/repos/$CODENAME/ $CODENAME main
+deb http://builds.trisquel.org/repos/$CODENAME/ $CODENAME-security main
+#deb http://builds.trisquel.org/repos/$CODENAME/ $CODENAME-backports main
+
+deb http://archive.trisquel.org/trisquel $CODENAME main
+deb http://archive.trisquel.org/trisquel $CODENAME-updates main
+deb http://archive.trisquel.org/trisquel $CODENAME-security main
+#deb http://archive.trisquel.org/trisquel $CODENAME-backports main
+
+#deb-src http://archive.trisquel.org/trisquel $CODENAME main
+#deb-src http://archive.trisquel.org/trisquel $CODENAME-updates main
+#deb-src http://archive.trisquel.org/trisquel $CODENAME-security main
+#deb-src http://archive.trisquel.org/trisquel $CODENAME-backports main
+
 #Ubuntu sources (only source packages)
 deb-src http://archive.ubuntu.com/ubuntu $UBURELEASE main universe
 deb-src http://archive.ubuntu.com/ubuntu $UBURELEASE-updates main universe
+deb-src http://archive.ubuntu.com/ubuntu $UBURELEASE-security main universe
+
 EOF
 
 mount -o bind /proc /tmp/sbuild-create/$CODENAME-$ARCH/proc
@@ -151,9 +148,36 @@ type=directory
 profile=sbuild
 union-type=overlay
 directory=/var/lib/schroot/chroots/$CODENAME-$ARCH
-command-prefix=/var/cache/ccache-sbuild/sbuild-setup,eatmydata,linux$BITS
+command-prefix=linux$BITS
 EOF
+
+if ! [ -e /etc/schroot/setup.d/04tmpfs ]; then
+cat >/etc/schroot/setup.d/04tmpfs <<"END"
+#!/bin/sh
+
+set -e
+
+. "$SETUP_DATA_DIR/common-data"
+. "$SETUP_DATA_DIR/common-functions"
+. "$SETUP_DATA_DIR/common-config"
+
+MEM=$(free --giga |grep Mem: |awk '{print $2}')
+SIZE=$(expr ${MEM}00 / 110)
+
+if [ "$STAGE" = "setup-start" ]; then
+  mount -t tmpfs overlay /var/lib/schroot/union/overlay -o size=${SIZE}G
+elif [ "$STAGE" = "setup-recover" ]; then
+  mount -t tmpfs overlay /var/lib/schroot/union/overlay -o size=${SIZE}G
+elif [ "$STAGE" = "setup-stop" ]; then
+  umount -f /var/lib/schroot/union/overlay
+fi
+END
+chmod a+rx /etc/schroot/setup.d/04tmpfs
+
+fi
+
 
 sbuild-update -udcar $CODENAME-$ARCH
 
 echo "Setup of schroot $CODENAME-$ARCH finished successfully"
+
