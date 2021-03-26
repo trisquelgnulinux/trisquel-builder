@@ -85,7 +85,7 @@ echo set debconf/frontend Noninteractive | debconf-communicate
 echo set debconf/priority critical | debconf-communicate
 # Install basic build tool set, trying to match buildd
 apt-get -y --force-yes install build-essential
-apt-get -y --force-yes install --no-install-recommends fakeroot apt-utils pkgbinarymangler apt devscripts zip unzip quilt wget lsb-release
+apt-get -y --force-yes install --no-install-recommends fakeroot apt-utils pkgbinarymangler apt devscripts zip unzip quilt wget lsb-release gnupg
 
 
 
@@ -130,7 +130,7 @@ deb-src http://archive.ubuntu.com/ubuntu $UBURELEASE-security main universe
 EOF
 
 mount -o bind /proc /tmp/sbuild-create/$CODENAME-$ARCH/proc
-chroot /tmp/sbuild-create/$CODENAME-$ARCH sh -x /finish.sh
+chroot /tmp/sbuild-create/$CODENAME-$ARCH bash -x /finish.sh
 umount /tmp/sbuild-create/$CODENAME-$ARCH/proc
 
 rm -rf /var/lib/schroot/chroots/$CODENAME-$ARCH
