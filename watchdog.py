@@ -19,6 +19,7 @@ import urllib2
 import itertools
 import subprocess
 import zlib
+import lzma
 import apt_pkg
 import os
 import copy
@@ -41,20 +42,44 @@ def calculatenewversion(package,dist):
 def warn(text):
     print "             WARNING: " + text
 
-def listmirror(dic, url, dist, component):
-    url = url + "/dists/" + dist + "/" + component + "/source/Sources.gz"
-    if url not in urldata:
-      try:
-          #print url
-          urldata[url] = urllib2.urlopen(url).read()
-      except:
-          warn( url + " 404")
-          return
-    try:
-        pkglist = zlib.decompress(urldata[url], 16+zlib.MAX_WBITS)
-    except:
-        warn ( url + " 404")
+def listmirror(dic, mirror, dist, component):
+    urlbuilder = mirror + "/dists/" + dist + "/" + component + "/source/Sources.{}"
+    compressionexts = ["gz", "xz"]
+
+    url = None
+    for comp in compressionexts:
+        if urlbuilder.format(comp) in urldata:
+            url = urlbuilder.format(comp)
+            break
+    if url is None:
+        for i, comp in enumerate(compressionexts):
+            url = urlbuilder.format(comp)
+            try:
+                urldata[url] = urllib2.urlopen(url).read()
+                break
+            except urllib2.URLError as e:
+                pass
+            # If we reached the end, we did not find a Sources file
+            if i == len(compressionexts) - 1:
+                warn("Could not fetch sources for: \'{}/{} {}\'".format(mirror, dist, component))
+                return
+
+    if url.split(".")[-1] == "gz":
+        try:
+            pkglist = zlib.decompress(urldata[url], 16+zlib.MAX_WBITS)
+        except Exception as e:
+            warn(url + ": " + str(e))
+            return
+    elif url.split(".")[-1] == "xz":
+        try:
+            pkglist = lzma.decompress(urldata[url])
+        except Exception as e:
+            warn(url + ": " + str(e))
+            return
+    else:
+        warn("Unknown compression extension: " + url.split(".")[-1])
         return
+
     pkgmap = map(str.strip, pkglist.splitlines())
     for key,group in itertools.groupby(pkgmap, lambda x: x == ''):
         if not key:
