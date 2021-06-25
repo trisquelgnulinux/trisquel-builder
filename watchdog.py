@@ -125,7 +125,7 @@ def compare(udic, tdic,trisqueldist):
                             warn ("Skipping compilation of " + item + " "  +  metaver + " because " + item.replace('-meta','') + " package in Trisquel is " + linuxver)
                             continue
                     if os.path.exists(wd+'/package-helpers/helpers/make-'+item):
-                        print "Package " + item + " can be upgraded to version " + udic[item] + gettrisquelversion(item) + " current "+ trisqueldist +" version is " + tdic[item]
+                        print "Package " + item + " can be upgraded to version " + udic[item] + gettrisquelversion(item, trisqueldist) + " current "+ trisqueldist +" version is " + tdic[item]
                     else:
                         warn(item + ' helper not found')
 def comparepackage(udic, tdic, package,trisqueldist):
@@ -134,14 +134,14 @@ def comparepackage(udic, tdic, package,trisqueldist):
         return
     if not tdic.has_key(package):
         warn('package '+package+' not found in Trisquel')
-        print "Package " + package + " can be upgraded to version " + udic[package] + gettrisquelversion(package) + " current " + trisqueldist +" version is missing"
+        print "Package " + package + " can be upgraded to version " + udic[package] + gettrisquelversion(package, trisqueldist) + " current " + trisqueldist +" version is missing"
         return
     if apt_pkg.version_compare(tdic[package],udic[package]) < 0:
-        print "Package " + package + " can be upgraded to version " + udic[package] + gettrisquelversion(package) + " current " + trisqueldist +" version is " + tdic[package]
+        print "Package " + package + " can be upgraded to version " + udic[package] + gettrisquelversion(package, trisqueldist) + " current " + trisqueldist +" version is " + tdic[package]
 
-def gettrisquelversion(package):
-    revision=subprocess.check_output('/bin/grep "export REVISION=" '+wd+'/package-helpers/helpers/config |sed "s/.*=//"', shell=True).splitlines()[0]
-    version=subprocess.check_output('/bin/grep ^VERSION= '+wd+'/package-helpers/helpers/make-'+package+'|sed "s/.*=//" ', shell=True).splitlines()[0]
+def gettrisquelversion(package,branch):
+    revision=subprocess.check_output(gitcommand +'show origin/'+branch+':helpers/config | grep "export REVISION=" |sed "s/.*=//"', shell=True).splitlines()[0]
+    version=subprocess.check_output(gitcommand +'show origin/'+branch+':helpers/make-'+package+' | grep "^VERSION=" |sed "s/.*=//"', shell=True).splitlines()[0]
     return '+'+revision+'trisquel'+version
 
 def checkversions(ubuntudist,trisqueldist):
@@ -156,13 +156,13 @@ def checkversions(ubuntudist,trisqueldist):
     compare(udic, tdic,trisqueldist)
 
 def externals(upstream, branch):
-    packages = subprocess.check_output(gitcommand +'ls-tree -r --name-only '+branch+' |grep helpers/make- |sed "s/.*make-//"', shell=True).splitlines()
+    packages = subprocess.check_output(gitcommand +'ls-tree -r --name-only origin/'+branch+' |grep helpers/make- |sed "s/.*make-//"', shell=True).splitlines()
     for package in packages:
         external=''
         backport=''
         try:
-            external=subprocess.check_output(gitcommand +'show '+branch+':helpers/make-'+package+' |grep EXTERNAL ', shell=True).splitlines()
-            backport=subprocess.check_output(gitcommand +'show '+branch+':helpers/make-'+package+' |grep BACKPORT ', shell=True).splitlines()
+            external=subprocess.check_output(gitcommand +'show origin/'+branch+':helpers/make-'+package+' |grep EXTERNAL ', shell=True).splitlines()
+            backport=subprocess.check_output(gitcommand +'show origin/'+branch+':helpers/make-'+package+' |grep BACKPORT ', shell=True).splitlines()
         except:
             pass
         if external != '':
@@ -203,7 +203,6 @@ for pair in ['focal','nabia'],['bionic','etiona'],['xenial','flidas']:
     baseudic={}
     print "========================================================================="
     print "Checking pair: " + str(pair)
-    os.system(gitcommand +'checkout ' + pair[1])
-    os.system(gitcommand + 'pull')
+    os.system(gitcommand + 'fetch')
     checkversions(pair[0], pair[1])
     externals(pair[0], pair[1])
