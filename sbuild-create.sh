@@ -33,8 +33,10 @@ set -e
 
 CODENAME=$1
 ARCH=$2
-[ "$ARCH" = "i386" ] && BITS=32
-[ "$ARCH" = "amd64" ] && BITS=64
+[ "$ARCH" = "i386" ] || [ "$ARCH" = "armhf" ] && BITS=32
+[ "$ARCH" = "amd64" ] || [ "$ARCH" = "arm64" ] && BITS=64
+PORTS=false
+[ "$ARCH" = "armhf" ] || [ "$ARCH" = "arm64" ] && PORTS=true
 REPO=http://archive.trisquel.org/trisquel
 
 [ "$CODENAME" == "nabia" ] && UBURELEASE=focal
@@ -105,6 +107,8 @@ rm /finish.sh
 echo Finished self-setup
 MAINEOF
 
+UBUSRC=archive.ubuntu.com/ubuntu
+$PORTS && UBUSRC=ports.ubuntu.com/
 
 cat << EOF > /tmp/sbuild-create/$CODENAME-$ARCH/etc/apt/sources.list
 
@@ -123,9 +127,9 @@ deb http://archive.trisquel.org/trisquel $CODENAME-security main
 #deb-src http://archive.trisquel.org/trisquel $CODENAME-backports main
 
 #Ubuntu sources (only source packages)
-deb-src http://archive.ubuntu.com/ubuntu $UBURELEASE main universe
-deb-src http://archive.ubuntu.com/ubuntu $UBURELEASE-updates main universe
-deb-src http://archive.ubuntu.com/ubuntu $UBURELEASE-security main universe
+deb-src http://$UBUSRC $UBURELEASE main universe
+deb-src http://$UBUSRC $UBURELEASE-updates main universe
+deb-src http://$UBUSRC $UBURELEASE-security main universe
 
 EOF
 
@@ -162,6 +166,7 @@ set -e
 . "$SETUP_DATA_DIR/common-config"
 
 MEM=$(free --giga |grep Mem: |awk '{print $2}')
+[ $MEM -lt 30 ] || exit 0
 SIZE=$(expr ${MEM}00 / 110)
 
 if [ "$STAGE" = "setup-start" ]; then
