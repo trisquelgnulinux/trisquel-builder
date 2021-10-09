@@ -1,0 +1,193 @@
+#!/usr/bin/python3
+
+#    Copyright (C) 2015-2021  Ruben Rodriguez <ruben@trisquel.info>
+#
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 2 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program; if not, write to the Free Software
+#    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
+
+import os
+import sys
+import subprocess
+import apt_pkg
+import apt
+
+wd='.'
+
+trisquelversions={'etiona': {'version':'9.0', 'codename':'etiona', 'upstream':'bionic'},
+                  'nabia': {'version':'10.0', 'codename':'nabia', 'upstream':'focal'}}
+
+DEBUG=len(sys.argv) > 1
+
+def debug(string):
+    if DEBUG:
+        print(string)
+
+def gitcommand(params):
+    if not os.path.exists(wd+"/package-helpers"):
+        os.system('/usr/bin/git clone https://gitlab.trisquel.org/trisquel/package-helpers.git ' + wd + "/package-helpers")
+    command = '/usr/bin/git --git-dir=' + wd + '/package-helpers/.git --work-tree=' + wd + '/package-helpers/ ' + params
+    result=subprocess.run(command.split(), capture_output=True)
+    if result.returncode == 0:
+        return result.stdout.decode("utf-8")
+    else:
+        print("E: command git %s failed" % params)
+        return None
+
+
+def listhelpers(dist):
+    paths = gitcommand("ls-tree  --name-only origin/%s:helpers " % dist).split()
+    helpers = []
+    for i, path in enumerate(paths):
+        if path == "DATA" or path == "config": continue
+        helpers.append(path.replace("make-", ""))
+
+    return helpers
+
+def helperversion(dist,package):
+    external = False
+    backport = False
+
+    helper = gitcommand("show origin/%s:helpers/make-%s" % (dist, package))
+    for line in helper.splitlines():
+        if line.startswith("VERSION="):
+            version = line.replace("VERSION=","").replace("\n","")
+            version = "+"+trisquelversions[dist]['version']+"trisquel"+version
+        if line.startswith("EXTERNAL="):
+            external = line.replace("EXTERNAL=","").replace("\n","").replace('\'','').replace('\"','')
+        if line.startswith("BACKPORT"):
+            backport = True
+
+    return {'version': version, 'external': external, 'backport': backport}
+
+def makesourceslist(name,uri,suites, components):
+    lines = []
+    for suite in suites:
+        lines.append("%s %s %s %s\n" % ("deb-src", uri, suite, components))
+    if name == 'trisquel':
+        lines.append("%s %s %s %s\n" % ("deb-src", "http://builds.trisquel.org/repos/%s" % dist, dist, components))
+        lines.append("%s %s %s %s\n" % ("deb-src", "http://builds.trisquel.org/repos/%s" % dist, "%s-security" % dist , components))
+    if name == 'trisquel-backports':
+        lines.append("%s %s %s %s\n" % ("deb-src", "http://builds.trisquel.org/repos/%s" % dist, "%s-backports" % dist, components))
+    f = open("./apt/%s/etc/apt/sources.list" % name, "w")
+    f.writelines(lines)
+    f.close()
+
+def makerepo(name, uri, suites, components):
+    debug("Building cache for %s repository... " % name)
+    if not os.path.exists("./apt/%s" % name):
+        os.makedirs("./apt/%s/var/lib/apt/lists" % name)
+        os.makedirs("./apt/%s/etc/apt/sources.list.d" % name)
+    apt_pkg.config.set("Dir::Cache::pkgcache", "")
+    apt_pkg.config.set("Dir::Cache::archives", "")
+    #TODO gpg key handling
+    apt_pkg.config.set("Acquire::Check-Valid-Until",  "false")
+    apt_pkg.config.set("Acquire::AllowInsecureRepositories",  "true")
+    apt_pkg.config.set("Acquire::AllowDowngradeToInsecureRepositories",  "true")
+    apt_pkg.config.set("Dir",  "./apt/%s/" % name)
+    apt_pkg.config.set("Dir::State::lists",  "./apt/%s/var/lib/apt/lists" % name)
+    apt_pkg.config.set("Dir::Etc::sourcelist", "./apt/%s/etc/apt/sources.list" % name)
+    apt_pkg.config.set("Dir::Etc::sourceparts", "./apt/%s/etc/apt/sources.list.d" % name)
+    apt_pkg.config.set("Dir::State::status", "/dev/null")
+    makesourceslist(name, uri, suites, components)
+    apt_pkg.init()
+    cache = apt.Cache()
+    cache.update(raise_on_error=True)
+    cache.open()
+    cache.close()
+    try:
+        src = apt_pkg.SourceRecords()
+    except:
+        debug("E: could not set up repo cache for %s" % name)
+        return None
+    return src
+
+def lookup(record, package):
+    if record == None:
+        return None
+    record.restart()
+    version = 0
+    newversion = 0
+    while record.lookup(package):
+        newversion=record.version
+        if version == 0 or apt_pkg.version_compare(version,newversion) < 0:
+            version = newversion
+    return version
+
+
+for dist in ["nabia","etiona"]:
+    print("=========================================================================")
+    print("Checking %s" % dist)
+    upstream = trisquelversions[dist]['upstream']
+
+    T = makerepo("trisquel", "http://es.archive.trisquel.org/trisquel", [dist, "%s-updates" % dist, "%s-security" % dist], "main")
+    U = makerepo("ubuntu", "http://archive.ubuntu.com/ubuntu", [upstream, "%s-updates" % upstream, "%s-security" % upstream], "main universe")
+    Ub = makerepo("ubuntu-backports", "http://archive.ubuntu.com/ubuntu", ["%s-backports" % upstream], "main universe")
+    Tb = makerepo("trisquel-backports", "http://es.archive.trisquel.org/trisquel", ["%s-backports" % dist], "main")
+
+    for package in listhelpers(dist):
+        debug("")
+        debug(package)
+        tversion = helperversion(dist, package)
+
+        if not tversion['external']:
+            if not tversion['backport']:
+                # General usecase, no backport or external
+                tresult=lookup(T, package)
+                uresult=lookup(U, package)
+                if tresult and not uresult:
+                    print("%s missing on Ubuntu! Trisquel has version %s" % (package, tresult))
+                if uresult and not tresult:
+                    print("Package %s can be upgraded to version %s current %s version is missing" % (package, uresult+tversion['version'], dist))
+                if tresult and uresult:
+                    if apt_pkg.version_compare(tresult, uresult + tversion['version']) < 0:
+                        #TODO: if package is linux*-meta, check that the matching kernel has been built first
+                        if "-meta" in package: continue
+                        #TODO: if dependencies are defined in helper, check that they are built in order
+                        print("Package %s can be upgraded to version %s current %s version is %s" % (package, uresult+tversion['version'], dist, tresult))
+                    else:
+                         debug("%s: Trisquel backports has %s and ubuntu backports has %s helper:%s" % (package, tresult, uresult, tversion['version']))
+            else:
+                # Backport but no external
+                tresult=lookup(Tu, package)
+                uresult=lookup(Uu, package)
+                if tresult and not uresult:
+                    print("%s missing on Ubuntu backports! Trisquel has version %s" % (package, tresult))
+                if uresult and not tresult:
+                    print("Package %s can be upgraded to version %s current %s version is missing" % (package, uresult+tversion['version'], dist))
+                if tresult and uresult:
+                    if apt_pkg.version_compare(tresult, uresult + tversion['version']) < 0:
+                        print("Package %s can be upgraded to version %s current %s version is %s" % (package, uresult+tversion['version'], dist, tresult))
+                    else:
+                        debug("%s: Trisquel backports has %s and ubuntu backports has %s helper:%s" % (package, tresult, uresult, tversion['version']))
+
+        else:
+            # External
+            suite=tversion['external'].split()[2].replace("$UPSTREAM", trisquelversions[dist]['upstream'])
+            components=' '.join(tversion['external'].split()[3:])
+            E = makerepo(package, tversion['external'].split()[1], [suite], components)
+
+            if tversion['backport']:
+                tresult=lookup(Tb, package)
+            else:
+                tresult=lookup(T, package)
+            eresult=lookup(E, package)
+            if tresult and not eresult:
+                print("%s missing on external! Trisquel has version %s" % (package, tresult))
+            if eresult and not tresult:
+                print("Package %s can be upgraded to version %s current %s version is missing" % (package, eresult+tversion['version'], dist))
+            if tresult and eresult:
+                if apt_pkg.version_compare(tresult, eresult + tversion['version']) < 0:
+                    print("Package %s can be upgraded to version %s current %s version is %s" % (package, eresult+tversion['version'], dist, tresult))
+                else:
+                    debug("%s: Trisquel has %s and external has %s helper:%s" % (package, tresult, eresult, tversion['version']))
