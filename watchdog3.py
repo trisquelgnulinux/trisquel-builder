@@ -57,6 +57,7 @@ def listhelpers(dist):
 def helperversion(dist,package):
     external = False
     backport = False
+    depends = []
 
     helper = gitcommand("show origin/%s:helpers/make-%s" % (dist, package))
     for line in helper.splitlines():
@@ -67,8 +68,10 @@ def helperversion(dist,package):
             external = line.replace("EXTERNAL=","").replace("\n","").replace('\'','').replace('\"','')
         if line.startswith("BACKPORT"):
             backport = True
+        if line.startswith("DEPENDS="):
+            depends = line.replace("DEPENDS=", "").replace(" ", "").split(",")
 
-    return {'version': version, 'external': external, 'backport': backport}
+    return {'version': version, 'external': external, 'backport': backport, 'depends': depends}
 
 def makesourceslist(name,uri,suites, components):
     lines = []
@@ -102,7 +105,15 @@ def makerepo(name, uri, suites, components):
     makesourceslist(name, uri, suites, components)
     apt_pkg.init()
     cache = apt.Cache()
-    cache.update(raise_on_error=True)
+    try:
+        cache.update(raise_on_error=True)
+    except:
+        try:
+            debug("Cache for %s failed to build, trying again" % name)
+            cache.update(raise_on_error=True)
+        except:
+            debug("Cache for %s failed to build again, giving up")
+            return None
     cache.open()
     cache.close()
     try:
@@ -124,10 +135,43 @@ def lookup(record, package):
             version = newversion
     return version
 
+def compare(tversion, tresult, uresult, package, dist, cache):
+    if apt_pkg.version_compare(tresult, uresult + tversion['version']) < 0 or "meta" in package:
+        # Never build linux metapackages before the binary packages
+        if "-meta" in package and package.startswith('linux'):
+            debug("Metapackage: %s | trisquel version: %s | upstream version: %s | helper: %s" % (package, tresult, uresult, tversion['version']) )
+            basepackage = package.replace("-meta", "")
+            result = lookup(cache,basepackage)
+            if result:
+                if "trisquel" not in result:
+                    print("E: Skipping building %s, binary package exists but has no trisquel version" % package)
+                    return
+                debug("Upstream version of %s: %s" % (basepackage, result))
+                abi = tresult.split(".")
+                abi = '.'.join(abi[0:4])
+                if abi not in result.replace("-", '.'):
+                    print("W: Skipping building %s, binary package is out of date" % package)
+                    return
+            else:
+                print("W: Skipping building %s, binary package is missing" % package)
+                return
+        # If dependencies are defined in helper, check that they are built in order
+        if tversion['depends']:
+            for dependency in tversion['depends']:
+                result = lookup(cache, dependency)
+                # Also look in trisquel $dist main
+                if not result:
+                    result = lookup(T, dependency)
+                if not result or "trisquel" not in result:
+                    print("W: Skipping build, dependency %s missing for helper make-%s on %s" % (dependency, package, dist))
+        print("Package %s can be upgraded to version %s current %s version is %s" % (package, uresult+tversion['version'], dist, tresult))
+    else:
+        debug("W: %s: Trisquel repo has %s and upstream has %s helper:%s" % (package, tresult, uresult, tversion['version']))
+
+
 
 for dist in ["nabia","etiona"]:
-    print("=========================================================================")
-    print("Checking %s" % dist)
+    print("== Checking %s ==========================================================" % dist)
     upstream = trisquelversions[dist]['upstream']
 
     T = makerepo("trisquel", "http://es.archive.trisquel.org/trisquel", [dist, "%s-updates" % dist, "%s-security" % dist], "main")
@@ -150,13 +194,7 @@ for dist in ["nabia","etiona"]:
                 if uresult and not tresult:
                     print("Package %s can be upgraded to version %s current %s version is missing" % (package, uresult+tversion['version'], dist))
                 if tresult and uresult:
-                    if apt_pkg.version_compare(tresult, uresult + tversion['version']) < 0:
-                        #TODO: if package is linux*-meta, check that the matching kernel has been built first
-                        if "-meta" in package: continue
-                        #TODO: if dependencies are defined in helper, check that they are built in order
-                        print("Package %s can be upgraded to version %s current %s version is %s" % (package, uresult+tversion['version'], dist, tresult))
-                    else:
-                         debug("%s: Trisquel backports has %s and ubuntu backports has %s helper:%s" % (package, tresult, uresult, tversion['version']))
+                    compare(tversion, tresult, uresult, package, dist, T)
             else:
                 # Backport but no external
                 tresult=lookup(Tu, package)
@@ -166,10 +204,7 @@ for dist in ["nabia","etiona"]:
                 if uresult and not tresult:
                     print("Package %s can be upgraded to version %s current %s version is missing" % (package, uresult+tversion['version'], dist))
                 if tresult and uresult:
-                    if apt_pkg.version_compare(tresult, uresult + tversion['version']) < 0:
-                        print("Package %s can be upgraded to version %s current %s version is %s" % (package, uresult+tversion['version'], dist, tresult))
-                    else:
-                        debug("%s: Trisquel backports has %s and ubuntu backports has %s helper:%s" % (package, tresult, uresult, tversion['version']))
+                    compare(tversion, tresult, uresult, package, dist, Tb)
 
         else:
             # External
@@ -183,11 +218,8 @@ for dist in ["nabia","etiona"]:
                 tresult=lookup(T, package)
             eresult=lookup(E, package)
             if tresult and not eresult:
-                print("%s missing on external! Trisquel has version %s" % (package, tresult))
+                print("E: %s missing on external repository! Trisquel has version %s" % (package, tresult))
             if eresult and not tresult:
                 print("Package %s can be upgraded to version %s current %s version is missing" % (package, eresult+tversion['version'], dist))
             if tresult and eresult:
-                if apt_pkg.version_compare(tresult, eresult + tversion['version']) < 0:
-                    print("Package %s can be upgraded to version %s current %s version is %s" % (package, eresult+tversion['version'], dist, tresult))
-                else:
-                    debug("%s: Trisquel has %s and external has %s helper:%s" % (package, tresult, eresult, tversion['version']))
+                compare(tversion, tresult, eresult, package, dist, Tb if tversion['backport'] else T)
