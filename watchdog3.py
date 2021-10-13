@@ -136,7 +136,7 @@ def lookup(record, package):
     return version
 
 def compare(tversion, tresult, uresult, package, dist, cache):
-    if apt_pkg.version_compare(tresult, uresult + tversion['version']) < 0 or "meta" in package:
+    if apt_pkg.version_compare(tresult, uresult + tversion['version']) < 0:
         # Never build linux metapackages before the binary packages
         if "-meta" in package and package.startswith('linux'):
             debug("Metapackage: %s | trisquel version: %s | upstream version: %s | helper: %s" % (package, tresult, uresult, tversion['version']) )
@@ -166,7 +166,7 @@ def compare(tversion, tresult, uresult, package, dist, cache):
                     print("W: Skipping build, dependency %s missing for helper make-%s on %s" % (dependency, package, dist))
         print("Package %s can be upgraded to version %s current %s version is %s" % (package, uresult+tversion['version'], dist, tresult))
     else:
-        debug("W: %s: Trisquel repo has %s and upstream has %s helper:%s" % (package, tresult, uresult, tversion['version']))
+        debug("%s: Trisquel repo has %s and upstream has %s helper:%s" % (package, tresult, uresult, tversion['version']))
 
 
 
