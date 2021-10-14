@@ -23,21 +23,23 @@ import subprocess
 import apt_pkg
 import apt
 
-parser = argparse.ArgumentParser(description=("Identify packages out-of-sync between "
-                                              "upstream and Trisquel"))
-parser.add_argument('working_directory',
-                    help=("Directory to clone package helpers and create apt configuration"),
-                    nargs='?', default=os.getcwd())
-parser.add_argument('--debug', help="Enable degugging printing",
-                    default=False, action='store_true')
-args = parser.parse_args()
-
-wd = args.working_directory
-
 trisquelversions = {
     'etiona': {'version': '9.0', 'codename': 'etiona', 'upstream': 'bionic'},
     'nabia': {'version': '10.0', 'codename': 'nabia', 'upstream': 'focal'}
     }
+
+parser = argparse.ArgumentParser(description=("Identify packages out-of-sync between "
+                                              "upstream and Trisquel"))
+parser.add_argument('--working_directory',
+                    help=("Directory to clone package helpers and create apt configuration"),
+                    nargs='?', default=os.getcwd())
+parser.add_argument('--release',
+                    help=("Trisquel release to check. Releases known by this script: %s"
+                          % ', '.join(trisquelversions.keys())),
+                    nargs='*', default="")
+parser.add_argument('--debug', help="Enable degugging printing",
+                    default=False, action='store_true')
+args = parser.parse_args()
 
 
 def debug(string):
@@ -46,13 +48,11 @@ def debug(string):
 
 
 def gitcommand(params):
-    if not os.path.exists(wd+"/package-helpers"):
-        os.system('/usr/bin/git clone \
-                  https://gitlab.trisquel.org/trisquel/package-helpers.git '
-                  + wd + "/package-helpers")
-    command = '/usr/bin/git --git-dir=' \
-        + wd + '/package-helpers/.git --work-tree=' \
-        + wd + '/package-helpers/ ' + params
+    if not os.path.exists("%s/package-helpers" % args.working_directory):
+        os.system("/usr/bin/git clone https://gitlab.trisquel.org/trisquel/package-helpers.git \
+                  %s/package-helpers" % args.working_directory)
+    command = "/usr/bin/git --git-dir=%s/package-helpers/.git --work-tree=%s/package-helpers/ %s" \
+              % (args.working_directory, args.working_directory, params)
     result = subprocess.run(command.split(), capture_output=True)
     if result.returncode == 0:
         return result.stdout.decode("utf-8")
@@ -94,7 +94,7 @@ def helperversion(dist, package):
     return {'version': version, 'external': external, 'backport': backport, 'depends': depends}
 
 
-def makesourceslist(name, uri, suites, components):
+def makesourceslist(name, uri, suites, components, dist):
     lines = []
     for suite in suites:
         lines.append("%s %s %s %s\n" % ("deb-src", uri, suite, components))
@@ -109,12 +109,12 @@ def makesourceslist(name, uri, suites, components):
         lines.append("%s %s %s %s\n" %
                      ("deb-src", "http://builds.trisquel.org/repos/%s" %
                       dist, "%s-backports" % dist, components))
-    f = open("./apt/%s/etc/apt/sources.list" % name, "w")
+    f = open("%s/apt/%s/etc/apt/sources.list" % (args.working_directory, name), "w")
     f.writelines(lines)
     f.close()
 
 
-def makerepo(name, uri, suites, components):
+def makerepo(name, uri, suites, components, dist):
     debug("Building cache for %s repository... " % name)
     if not os.path.exists("./apt/%s" % name):
         os.makedirs("./apt/%s/var/lib/apt/lists" % name)
@@ -130,7 +130,7 @@ def makerepo(name, uri, suites, components):
     apt_pkg.config.set("Dir::Etc::sourcelist", "./apt/%s/etc/apt/sources.list" % name)
     apt_pkg.config.set("Dir::Etc::sourceparts", "./apt/%s/etc/apt/sources.list.d" % name)
     apt_pkg.config.set("Dir::State::status", "/dev/null")
-    makesourceslist(name, uri, suites, components)
+    makesourceslist(name, uri, suites, components, dist)
     apt_pkg.init()
     cache = apt.Cache()
     try:
@@ -207,8 +207,8 @@ def compare(tversion, tresult, uresult, package, dist, cache):
 
 
 def check_versions(trepo, urepo, tversion, package, dist):
-    tresult=lookup(trepo, package)
-    uresult=lookup(urepo, package)
+    tresult = lookup(trepo, package)
+    uresult = lookup(urepo, package)
     if tresult and not uresult:
         if tversion['external']:
             repo_str = "external repository"
@@ -226,22 +226,27 @@ def check_versions(trepo, urepo, tversion, package, dist):
         compare(tversion, tresult, uresult, package, dist, trepo)
 
 
-for dist in ["nabia", "etiona"]:
+def checkdistro(dist):
     print("== Checking %s ==========================================================" % dist)
-    upstream = trisquelversions[dist]['upstream']
+    if dist in trisquelversions:
+        upstream = trisquelversions[dist]['upstream']
+    else:
+        print("E: release %s not found" % dist)
+        return
 
     T = makerepo("trisquel",
                  "http://archive.trisquel.org/trisquel",
-                 [dist, "%s-updates" % dist, "%s-security" % dist], "main")
+                 [dist, "%s-updates" % dist, "%s-security" % dist], "main", dist)
     U = makerepo("ubuntu",
                  "http://archive.ubuntu.com/ubuntu",
-                 [upstream, "%s-updates" % upstream, "%s-security" % upstream], "main universe")
+                 [upstream, "%s-updates" % upstream, "%s-security" % upstream],
+                 "main universe", upstream)
     Ub = makerepo("ubuntu-backports",
                   "http://archive.ubuntu.com/ubuntu",
-                  ["%s-backports" % upstream], "main universe")
+                  ["%s-backports" % upstream], "main universe", upstream)
     Tb = makerepo("trisquel-backports",
                   "http://archive.trisquel.org/trisquel",
-                  ["%s-backports" % dist], "main")
+                  ["%s-backports" % dist], "main", dist)
 
     for package in listhelpers(dist):
         debug("")
@@ -258,9 +263,14 @@ for dist in ["nabia", "etiona"]:
             suite = tversion['external'].split()[2]\
                     .replace("$UPSTREAM", trisquelversions[dist]['upstream'])
             components = ' '.join(tversion['external'].split()[3:])
-            E = makerepo(package, tversion['external'].split()[1], [suite], components)
+            E = makerepo(package, tversion['external'].split()[1], [suite], components, dist)
 
             if tversion['backport']:
                 check_versions(Tb, E, tversion, package, dist)
             else:
                 check_versions(T, E, tversion, package, dist)
+
+
+if __name__ == '__main__' and args.release:
+    for release in args.release:
+        checkdistro(release)
