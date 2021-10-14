@@ -16,24 +16,32 @@
 #    along with this program; if not, write to the Free Software
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 
+import argparse
 import os
 import sys
 import subprocess
 import apt_pkg
 import apt
 
-wd = '.'
+parser = argparse.ArgumentParser(description=("Identify packages out-of-sync between "
+                                              "upstream and Trisquel"))
+parser.add_argument('working_directory',
+                    help=("Directory to clone package helpers and create apt configuration"),
+                    nargs='?', default=os.getcwd())
+parser.add_argument('--debug', help="Enable degugging printing",
+                    default=False, action='store_true')
+args = parser.parse_args()
+
+wd = args.working_directory
 
 trisquelversions = {
     'etiona': {'version': '9.0', 'codename': 'etiona', 'upstream': 'bionic'},
     'nabia': {'version': '10.0', 'codename': 'nabia', 'upstream': 'focal'}
     }
 
-DEBUG = len(sys.argv) > 1
-
 
 def debug(string):
-    if DEBUG:
+    if args.debug:
         print(string)
 
 
@@ -54,6 +62,7 @@ def gitcommand(params):
 
 
 def listhelpers(dist):
+    gitcommand("fetch --all")
     paths = gitcommand("ls-tree  --name-only origin/%s:helpers " % dist).split()
     helpers = []
     for i, path in enumerate(paths):
@@ -166,8 +175,8 @@ def compare(tversion, tresult, uresult, package, dist, cache):
             result = lookup(cache, basepackage)
             if result:
                 if "trisquel" not in result:
-                    print("E: Skipping building %s,\
-                            binary package exists but has no trisquel version" % package)
+                    print(("E: Skipping building %s, "
+                           "binary package exists but has no trisquel version") % package)
                     return
                 debug("Upstream version of %s: %s" % (basepackage, result))
                 abi = tresult.split(".")
@@ -186,11 +195,11 @@ def compare(tversion, tresult, uresult, package, dist, cache):
                 if not result:
                     result = lookup(T, dependency)
                 if not result or "trisquel" not in result:
-                    print("W: Skipping build,\
-                          dependency %s missing for helper make-%s on %s"
+                    print(("W: Skipping build, "
+                           "dependency %s missing for helper make-%s on %s ")
                           % (dependency, package, dist))
-        print("Package %s can be upgraded to version %s\
-              current %s version is %s"
+        print(("Package %s can be upgraded to version %s "
+               "current %s version is %s")
               % (package, uresult+tversion['version'], dist, tresult))
     else:
         debug("%s: Trisquel repo has %s and upstream has %s helper:%s"
@@ -225,11 +234,11 @@ for dist in ["nabia", "etiona"]:
                 tresult = lookup(T, package)
                 uresult = lookup(U, package)
                 if tresult and not uresult:
-                    print("%s missing on Ubuntu!\
-                          Trisquel has version %s" % (package, tresult))
+                    print(("%s missing on Ubuntu! "
+                          "Trisquel has version %s") % (package, tresult))
                 if uresult and not tresult:
-                    print("Package %s can be upgraded to version %s\
-                          current %s version is missing" %
+                    print(("Package %s can be upgraded to version %s "
+                           "current %s version is missing") %
                           (package, uresult+tversion['version'], dist))
                 if tresult and uresult:
                     compare(tversion, tresult, uresult, package, dist, T)
@@ -238,11 +247,11 @@ for dist in ["nabia", "etiona"]:
                 tresult = lookup(Tu, package)
                 uresult = lookup(Uu, package)
                 if tresult and not uresult:
-                    print("%s missing on Ubuntu backports!\
-                          Trisquel has version %s" % (package, tresult))
+                    print(("%s missing on Ubuntu backports! "
+                           "Trisquel has version %s") % (package, tresult))
                 if uresult and not tresult:
-                    print("Package %s can be upgraded to version %s\
-                          current %s version is missing"
+                    print(("Package %s can be upgraded to version %s "
+                           "current %s version is missing")
                           % (package, uresult+tversion['version'], dist))
                 if tresult and uresult:
                     compare(tversion, tresult, uresult, package, dist, Tb)
@@ -259,11 +268,11 @@ for dist in ["nabia", "etiona"]:
                 tresult = lookup(T, package)
             eresult = lookup(E, package)
             if tresult and not eresult:
-                print("E: %s missing on external repository!\
-                      Trisquel has version %s" % (package, tresult))
+                print(("E: %s missing on external repository! "
+                       "Trisquel has version %s") % (package, tresult))
             if eresult and not tresult:
-                print("Package %s can be upgraded to version %s\
-                      current %s version is missing"
+                print(("Package %s can be upgraded to version %s "
+                       "current %s version is missing")
                       % (package, eresult+tversion['version'], dist))
             if tresult and eresult:
                 compare(tversion, tresult, eresult, package,
