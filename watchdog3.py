@@ -16,24 +16,32 @@
 #    along with this program; if not, write to the Free Software
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 
+import argparse
 import os
 import sys
 import subprocess
 import apt_pkg
 import apt
 
-wd = '.'
+parser = argparse.ArgumentParser(description=("Identify packages out-of-sync between "
+                                              "upstream and Trisquel"))
+parser.add_argument('working_directory',
+                    help=("Directory to clone package helpers and create apt configuration"),
+                    nargs='?', default=os.getcwd())
+parser.add_argument('--debug', help="Enable degugging printing",
+                    default=False, action='store_true')
+args = parser.parse_args()
+
+wd = args.working_directory
 
 trisquelversions = {
     'etiona': {'version': '9.0', 'codename': 'etiona', 'upstream': 'bionic'},
     'nabia': {'version': '10.0', 'codename': 'nabia', 'upstream': 'focal'}
     }
 
-DEBUG = len(sys.argv) > 1
-
 
 def debug(string):
-    if DEBUG:
+    if args.debug:
         print(string)
 
 
