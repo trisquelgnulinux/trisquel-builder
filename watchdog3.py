@@ -206,6 +206,26 @@ def compare(tversion, tresult, uresult, package, dist, cache):
               % (package, tresult, uresult, tversion['version']))
 
 
+def check_versions(trepo, urepo, tversion, package, dist):
+    tresult=lookup(trepo, package)
+    uresult=lookup(urepo, package)
+    if tresult and not uresult:
+        if tversion['external']:
+            repo_str = "external repository"
+        elif tversion['backport']:
+            repo_str = "Ubuntu backports"
+        else:
+            repo_str = "Ubuntu"
+
+        print("%s missing on %s! Trisquel has version %s"
+              % (package, repo_str, tresult))
+    if uresult and not tresult:
+        print("Package %s can be upgraded to version %s current %s version is missing"
+              % (package, uresult + tversion['version'], dist))
+    if tresult and uresult:
+        compare(tversion, tresult, uresult, package, dist, trepo)
+
+
 for dist in ["nabia", "etiona"]:
     print("== Checking %s ==========================================================" % dist)
     upstream = trisquelversions[dist]['upstream']
@@ -230,31 +250,9 @@ for dist in ["nabia", "etiona"]:
 
         if not tversion['external']:
             if not tversion['backport']:
-                # General usecase, no backport or external
-                tresult = lookup(T, package)
-                uresult = lookup(U, package)
-                if tresult and not uresult:
-                    print(("%s missing on Ubuntu! "
-                          "Trisquel has version %s") % (package, tresult))
-                if uresult and not tresult:
-                    print(("Package %s can be upgraded to version %s "
-                           "current %s version is missing") %
-                          (package, uresult+tversion['version'], dist))
-                if tresult and uresult:
-                    compare(tversion, tresult, uresult, package, dist, T)
+                check_versions(T, U, tversion, package, dist)
             else:
-                # Backport but no external
-                tresult = lookup(Tu, package)
-                uresult = lookup(Uu, package)
-                if tresult and not uresult:
-                    print(("%s missing on Ubuntu backports! "
-                           "Trisquel has version %s") % (package, tresult))
-                if uresult and not tresult:
-                    print(("Package %s can be upgraded to version %s "
-                           "current %s version is missing")
-                          % (package, uresult+tversion['version'], dist))
-                if tresult and uresult:
-                    compare(tversion, tresult, uresult, package, dist, Tb)
+                check_versions(Tb, Ub, tversion, package, dist)
         else:
             # External
             suite = tversion['external'].split()[2]\
@@ -263,17 +261,6 @@ for dist in ["nabia", "etiona"]:
             E = makerepo(package, tversion['external'].split()[1], [suite], components)
 
             if tversion['backport']:
-                tresult = lookup(Tb, package)
+                check_versions(Tb, E, tversion, package, dist)
             else:
-                tresult = lookup(T, package)
-            eresult = lookup(E, package)
-            if tresult and not eresult:
-                print(("E: %s missing on external repository! "
-                       "Trisquel has version %s") % (package, tresult))
-            if eresult and not tresult:
-                print(("Package %s can be upgraded to version %s "
-                       "current %s version is missing")
-                      % (package, eresult+tversion['version'], dist))
-            if tresult and eresult:
-                compare(tversion, tresult, eresult, package,
-                        dist, Tb if tversion['backport'] else T)
+                check_versions(T, E, tversion, package, dist)
