@@ -62,6 +62,7 @@ def gitcommand(params):
 
 
 def listhelpers(dist):
+    gitcommand("fetch --all")
     paths = gitcommand("ls-tree  --name-only origin/%s:helpers " % dist).split()
     helpers = []
     for i, path in enumerate(paths):
