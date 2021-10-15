@@ -30,13 +30,13 @@ TRISQUELRELEASES = {
 
 parser = argparse.ArgumentParser(description=("Identify packages out-of-sync between "
                                               "upstream and Trisquel"))
-parser.add_argument('--working_directory',
-                    help=("Directory to clone package helpers and create apt configuration"),
-                    nargs='?', default=os.getcwd())
-parser.add_argument('--release',
+parser.add_argument('release',
                     help=("Trisquel release to check. Releases known by this script: %s"
                           % ', '.join(TRISQUELRELEASES.keys())),
                     nargs='*', default="")
+parser.add_argument('--working_directory',
+                    help=("Directory to clone package helpers and create apt configuration"),
+                    nargs='?', default=os.getcwd())
 parser.add_argument('--debug', help="Enable degugging printing",
                     default=False, action='store_true')
 args = parser.parse_args()
@@ -153,17 +153,14 @@ def build_cache(name, uri, suites, components, release):
     cache = apt.Cache()
     try:
         cache.update(raise_on_error=True)
-    except apt_pkg.Error:
-        try:
-            debug("apt.Cache for %s failed to build, trying again" % name)
-            cache.update(raise_on_error=True)
-        except apt_pkg.Error:
-            debug("apt.Cache for %s failed to build again, giving up")
-            return None
+    except apt.cache.FetchFailedException:
+        debug("E: apt.Cache for %s failed to build")
+        raise
+        return None
     try:
         src = apt_pkg.SourceRecords()
     except apt_pkg.Error:
-        debug("E: could not get up apt_pkg.SourceRecords for %s" % name)
+        debug("E: could not get apt_pkg.SourceRecords for %s" % name)
         return None
     return {"cache": cache, "source_records": src}
 
@@ -307,5 +304,8 @@ def check_distro(release):
 
 
 if __name__ == '__main__' and args.release:
-    for release in args.release:
-        check_distro(release)
+    try:
+        for release in args.release:
+            check_distro(release)
+    except KeyboardInterrupt:
+        sys.exit(0)
