@@ -145,18 +145,18 @@ def make_sourceslist(name, uri, suites, components, release):
         lines.append("%s %s %s %s\n" %
                      ("deb-src", "http://builds.trisquel.org/repos/%s" %
                       release, release, components))
-        get_gpg_key(BUILDS_REPO_KEY, "%s/apt/trisquel/etc/apt/trusted.gpg"
-                    % (args.working_directory))
+        get_gpg_key(BUILDS_REPO_KEY, "%s/apt/%s/%s/etc/apt/trusted.gpg"
+                    % (args.working_directory, release, name))
         lines.append("%s %s %s %s\n" %
                      ("deb-src", "http://builds.trisquel.org/repos/%s" %
                       release, "%s-security" % release, components))
     if name == 'trisquel-backports':
-        get_gpg_key(BUILDS_REPO_KEY, "%s/apt/trisquel-backports/etc/apt/trusted.gpg"
-                    % (args.working_directory))
+        get_gpg_key(BUILDS_REPO_KEY, "%s/apt/%s/%s/etc/apt/trusted.gpg"
+                    % (args.working_directory, release, name))
         lines.append("%s %s %s %s\n" %
                      ("deb-src", "http://builds.trisquel.org/repos/%s" %
                       release, "%s-backports" % release, components))
-    f = open("%s/apt/%s/etc/apt/sources.list" % (args.working_directory, name), "w")
+    f = open("%s/apt/%s/%s/etc/apt/sources.list" % (args.working_directory, release, name), "w")
     f.writelines(lines)
     f.close()
 
@@ -167,22 +167,28 @@ def build_cache(name, uri, suites, components, release, keyid):
     Returns an apt.Cache object and a apt_pkg.SourceRecords object
     """
     debug("Building cache for %s repository... " % name)
-    if not os.path.exists("./apt/%s" % name):
-        os.makedirs("./apt/%s/var/lib/apt/lists" % name)
-        os.makedirs("./apt/%s/etc/apt/sources.list.d" % name)
+    if not os.path.exists("%s/apt/%s/%s"
+                          % (args.working_directory, release, name)):
+        os.makedirs("%s/apt/%s/%s/var/lib/apt/lists"
+                    % (args.working_directory, release, name))
+        os.makedirs("%s/apt/%s/%s/etc/apt/sources.list.d"
+                    % (args.working_directory, release, name))
     apt_pkg.config.set("Dir::Cache::pkgcache", "")
     apt_pkg.config.set("Dir::Cache::archives", "")
-    if not args.check_gpg or not get_gpg_key(keyid, "%s/apt/%s/etc/apt/trusted.gpg"
-                                             % (args.working_directory, name)):
+    if not args.check_gpg or not get_gpg_key(keyid, "%s/apt/%s/%s/etc/apt/trusted.gpg"
+                                             % (args.working_directory, release, name)):
         if args.check_gpg:
             print("E: gpg key missing for %s, disabling check" % name)
         apt_pkg.config.set("Acquire::Check-Valid-Until",  "false")
         apt_pkg.config.set("Acquire::AllowInsecureRepositories",  "true")
         apt_pkg.config.set("Acquire::AllowDowngradeToInsecureRepositories",  "true")
-    apt_pkg.config.set("Dir",  "./apt/%s/" % name)
-    apt_pkg.config.set("Dir::State::lists",  "./apt/%s/var/lib/apt/lists" % name)
-    apt_pkg.config.set("Dir::Etc::sourcelist", "./apt/%s/etc/apt/sources.list" % name)
-    apt_pkg.config.set("Dir::Etc::sourceparts", "./apt/%s/etc/apt/sources.list.d" % name)
+    apt_pkg.config.set("Dir",  "%s/apt/%s/%s/" % (args.working_directory, release, name))
+    apt_pkg.config.set("Dir::State::lists",  "%s/apt/%s/%s/var/lib/apt/lists"
+                       % (args.working_directory, release, name))
+    apt_pkg.config.set("Dir::Etc::sourcelist", "%s/apt/%s/%s/etc/apt/sources.list"
+                       % (args.working_directory, release, name))
+    apt_pkg.config.set("Dir::Etc::sourceparts", "%s/apt/%s/%s/etc/apt/sources.list.d"
+                       % (args.working_directory, release, name))
     apt_pkg.config.set("Dir::State::status", "/dev/null")
     make_sourceslist(name, uri, suites, components, release)
     apt_pkg.init()
@@ -190,8 +196,8 @@ def build_cache(name, uri, suites, components, release, keyid):
     try:
         cache.update(raise_on_error=True)
     except apt.cache.FetchFailedException:
-        debug("E: apt.Cache for %s failed to build")
-        raise
+        debug("E: apt.Cache for %s failed to build" % name)
+        #raise
         return None
     try:
         src = apt_pkg.SourceRecords()
@@ -304,11 +310,11 @@ def check_distro(release):
     cache["ubuntu"] = build_cache("ubuntu",
                                   "http://archive.ubuntu.com/ubuntu",
                                   [upstream, "%s-updates" % upstream, "%s-security" % upstream],
-                                  "main universe", upstream, UBUNTU_REPO_KEY)
+                                  "main universe", release, UBUNTU_REPO_KEY)
     cache["ubuntu-backports"] = build_cache("ubuntu-backports",
                                             "http://archive.ubuntu.com/ubuntu",
                                             ["%s-backports" % upstream], "main universe",
-                                            upstream, UBUNTU_REPO_KEY)
+                                            release, UBUNTU_REPO_KEY)
     cache["trisquel-backports"] = build_cache("trisquel-backports",
                                               "http://archive.trisquel.org/trisquel",
                                               ["%s-backports" % release], "main",
