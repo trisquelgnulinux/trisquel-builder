@@ -28,6 +28,10 @@ TRISQUELRELEASES = {
     'nabia': {'version': '10.0', 'codename': 'nabia', 'upstream': 'focal'}
     }
 
+TRISQUEL_REPO_KEY = "B138CA450C05112F"
+BUILDS_REPO_KEY = "CFB708E203134F62"
+UBUNTU_REPO_KEY = "3B4FE6ACC0B21F32"
+
 parser = argparse.ArgumentParser(description=("Identify packages out-of-sync between "
                                               "upstream and Trisquel"))
 parser.add_argument('release',
@@ -38,6 +42,8 @@ parser.add_argument('--working_directory',
                     help=("Directory to clone package helpers and create apt configuration"),
                     nargs='?', default=os.getcwd())
 parser.add_argument('--debug', help="Enable degugging printing",
+                    default=False, action='store_true')
+parser.add_argument('--check_gpg', help="Retrieve and check gpg keys for each repository",
                     default=False, action='store_true')
 args = parser.parse_args()
 
@@ -64,6 +70,22 @@ def git_command(params):
         return None
 
 
+def get_gpg_key(keyid, keyring):
+    """
+    Retrieve a gpg key by id or full fingerprint, store it in keyring file
+    """
+    if not args.check_gpg:
+        return True
+    debug("Retrieving gpg key %s to %s" % (keyid, keyring))
+    result = subprocess.run("apt-key --keyring %s adv "
+                            "--keyserver keyserver.ubuntu.com --recv-keys %s"
+                            % (keyring, keyid), shell=True, capture_output=True)
+    if result.returncode != 0:
+        print("E: failed to fetch gpg key %s" % keyid)
+        return False
+    return True
+
+
 def list_helper_packages(release):
     """
     Given a Trisquel release, list all packages that have a helper script.
@@ -88,6 +110,7 @@ def get_helper_info(release, package):
     external = False
     backport = False
     depends = []
+    repokey = ""
 
     helper = git_command("show origin/%s:helpers/make-%s" % (release, package))
     for line in helper.splitlines():
@@ -101,8 +124,14 @@ def get_helper_info(release, package):
             backport = True
         if line.startswith("DEPENDS="):
             depends = line.replace("DEPENDS=", "").replace(" ", "").split(",")
+        if line.startswith("REPOKEY="):
+            repokey = line.replace("REPOKEY=", "").replace(" ", "")
 
-    return {'version': version, 'external': external, 'backport': backport, 'depends': depends}
+    return {'version': version,
+            'external': external,
+            'backport': backport,
+            'depends': depends,
+            "repokey": repokey}
 
 
 def make_sourceslist(name, uri, suites, components, release):
@@ -116,10 +145,14 @@ def make_sourceslist(name, uri, suites, components, release):
         lines.append("%s %s %s %s\n" %
                      ("deb-src", "http://builds.trisquel.org/repos/%s" %
                       release, release, components))
+        get_gpg_key(BUILDS_REPO_KEY, "%s/apt/trisquel/etc/apt/trusted.gpg"
+                    % (args.working_directory))
         lines.append("%s %s %s %s\n" %
                      ("deb-src", "http://builds.trisquel.org/repos/%s" %
                       release, "%s-security" % release, components))
     if name == 'trisquel-backports':
+        get_gpg_key(BUILDS_REPO_KEY, "%s/apt/trisquel-backports/etc/apt/trusted.gpg"
+                    % (args.working_directory))
         lines.append("%s %s %s %s\n" %
                      ("deb-src", "http://builds.trisquel.org/repos/%s" %
                       release, "%s-backports" % release, components))
@@ -128,7 +161,7 @@ def make_sourceslist(name, uri, suites, components, release):
     f.close()
 
 
-def build_cache(name, uri, suites, components, release):
+def build_cache(name, uri, suites, components, release, keyid):
     """
     Builds an apt repository based on parameters
     Returns an apt.Cache object and a apt_pkg.SourceRecords object
@@ -139,10 +172,13 @@ def build_cache(name, uri, suites, components, release):
         os.makedirs("./apt/%s/etc/apt/sources.list.d" % name)
     apt_pkg.config.set("Dir::Cache::pkgcache", "")
     apt_pkg.config.set("Dir::Cache::archives", "")
-    # TODO gpg key handling
-    apt_pkg.config.set("Acquire::Check-Valid-Until",  "false")
-    apt_pkg.config.set("Acquire::AllowInsecureRepositories",  "true")
-    apt_pkg.config.set("Acquire::AllowDowngradeToInsecureRepositories",  "true")
+    if not args.check_gpg or not get_gpg_key(keyid, "%s/apt/%s/etc/apt/trusted.gpg"
+                                             % (args.working_directory, name)):
+        if args.check_gpg:
+            print("E: gpg key missing for %s, disabling check" % name)
+        apt_pkg.config.set("Acquire::Check-Valid-Until",  "false")
+        apt_pkg.config.set("Acquire::AllowInsecureRepositories",  "true")
+        apt_pkg.config.set("Acquire::AllowDowngradeToInsecureRepositories",  "true")
     apt_pkg.config.set("Dir",  "./apt/%s/" % name)
     apt_pkg.config.set("Dir::State::lists",  "./apt/%s/var/lib/apt/lists" % name)
     apt_pkg.config.set("Dir::Etc::sourcelist", "./apt/%s/etc/apt/sources.list" % name)
@@ -264,17 +300,19 @@ def check_distro(release):
     cache["trisquel"] = build_cache("trisquel",
                                     "http://archive.trisquel.org/trisquel",
                                     [release, "%s-updates" % release, "%s-security" % release],
-                                    "main", release)
+                                    "main", release, TRISQUEL_REPO_KEY)
     cache["ubuntu"] = build_cache("ubuntu",
                                   "http://archive.ubuntu.com/ubuntu",
                                   [upstream, "%s-updates" % upstream, "%s-security" % upstream],
-                                  "main universe", upstream)
+                                  "main universe", upstream, UBUNTU_REPO_KEY)
     cache["ubuntu-backports"] = build_cache("ubuntu-backports",
                                             "http://archive.ubuntu.com/ubuntu",
-                                            ["%s-backports" % upstream], "main universe", upstream)
+                                            ["%s-backports" % upstream], "main universe",
+                                            upstream, UBUNTU_REPO_KEY)
     cache["trisquel-backports"] = build_cache("trisquel-backports",
                                               "http://archive.trisquel.org/trisquel",
-                                              ["%s-backports" % release], "main", release)
+                                              ["%s-backports" % release], "main",
+                                              release, TRISQUEL_REPO_KEY)
 
     for package in list_helper_packages(release):
         debug("")
@@ -290,11 +328,15 @@ def check_distro(release):
                                helper_info, package, release)
         else:
             # External
+            if not helper_info['repokey']:
+                debug("W: helper for %s has external repo but is missing REPOKEY"
+                      " defaulting to Ubuntu key: %s" % (package, UBUNTU_REPO_KEY))
+                helper_info['repokey'] = UBUNTU_REPO_KEY
             suite = helper_info['external'].split()[2]\
-                    .replace("$UPSTREAM", TRISQUELRELEASES[release]['upstream'])
+                .replace("$UPSTREAM", TRISQUELRELEASES[release]['upstream'])
             components = ' '.join(helper_info['external'].split()[3:])
             cache_external = build_cache(package, helper_info['external'].split()[1],
-                                         [suite], components, release)
+                                         [suite], components, release, helper_info['repokey'])
 
             if helper_info['backport']:
                 check_versions(cache["trisquel-backports"], cache_external,
