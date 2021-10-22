@@ -100,7 +100,6 @@ apt-get -y --force-yes dist-upgrade
 apt-get clean
 echo "dash dash/sh boolean false" | debconf-set-selections
 DEBIAN_FRONTEND=noninteractive dpkg-reconfigure dash
-sed '/backports/s/^#//' -i /etc/apt/sources.list
 
 # Clean up
 rm /finish.sh
@@ -114,17 +113,14 @@ cat << EOF > /tmp/sbuild-create/$CODENAME-$ARCH/etc/apt/sources.list
 
 deb http://builds.trisquel.org/repos/$CODENAME/ $CODENAME main
 deb http://builds.trisquel.org/repos/$CODENAME/ $CODENAME-security main
-#deb http://builds.trisquel.org/repos/$CODENAME/ $CODENAME-backports main
 
 deb http://archive.trisquel.org/trisquel $CODENAME main
 deb http://archive.trisquel.org/trisquel $CODENAME-updates main
 deb http://archive.trisquel.org/trisquel $CODENAME-security main
-#deb http://archive.trisquel.org/trisquel $CODENAME-backports main
 
 #deb-src http://archive.trisquel.org/trisquel $CODENAME main
 #deb-src http://archive.trisquel.org/trisquel $CODENAME-updates main
 #deb-src http://archive.trisquel.org/trisquel $CODENAME-security main
-#deb-src http://archive.trisquel.org/trisquel $CODENAME-backports main
 
 #Ubuntu sources (only source packages)
 deb-src http://$UBUSRC $UBURELEASE main universe
