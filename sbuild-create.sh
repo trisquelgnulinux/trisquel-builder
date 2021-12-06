@@ -144,6 +144,7 @@ cat << EOF > /etc/schroot/chroot.d/sbuild-$CODENAME-$ARCH
 description=$CODENAME-$ARCH
 groups=sbuild,root
 root-groups=sbuild,root
+source-root-groups=sbuild,root
 type=directory
 profile=sbuild
 union-type=overlay
