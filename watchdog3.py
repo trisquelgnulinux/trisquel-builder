@@ -255,7 +255,7 @@ def compare_versions(helper_info, tresult, uresult, package, release, cache):
                 result = lookup_src(cache, dependency)
                 # Also look in trisquel $release main
                 if not result:
-                    result = lookup_src(cache["trisquel"], dependency)
+                    result = lookup_src(cache, dependency)
                 if not result or "trisquel" not in result:
                     print(("W: Skipping build, "
                            "dependency %s missing for helper make-%s on %s ")
