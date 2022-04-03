@@ -113,14 +113,7 @@ chown 1007.1008 -R /home/jenkins
 
 #Add keys to trisquel schroot
 if [ "$UPSTREAM" != "upstream" ]; then
-# Reload package lists
-# Install ubuntu build keys
-apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 40976EAF437D05B5
-apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 3B4FE6ACC0B21F32
-# Trisquel keys
-apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 33C66596
-apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 0C05112F
-apt-key adv --recv-keys --keyserver keyserver.ubuntu.com FED8FD3E
+add_sbuild_keys
 cat /tmp/key.asc | gpg --dearmor | tee /etc/apt/trusted.gpg.d/builds-repo-key.gpg  >/dev/null
 fi
 
@@ -132,16 +125,9 @@ echo set debconf/priority critical | debconf-communicate
 apt-get -y --force-yes install build-essential
 apt-get -y --force-yes install --no-install-recommends fakeroot apt-utils aptitude pkgbinarymangler apt devscripts zip unzip quilt wget lsb-release gnupg
 
-#Add keys to upstream schroot
+#Add keys to upstream schroot (first get universe requirements).
 if [ "$UPSTREAM" = "upstream" ]; then
-# Reload package lists
-# Install ubuntu build keys
-apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 40976EAF437D05B5
-apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 3B4FE6ACC0B21F32
-# Trisquel keys
-apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 33C66596
-apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 0C05112F
-apt-key adv --recv-keys --keyserver keyserver.ubuntu.com FED8FD3E
+add_sbuild_keys
 fi
 
 # Set up expected /dev entries
