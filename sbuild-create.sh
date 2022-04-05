@@ -39,8 +39,13 @@ UPSTREAM=$3
 [ "$ARCH" = "amd64" ] || [ "$ARCH" = "arm64" ] && BITS=64
 PORTS=false
 [ "$ARCH" = "armhf" ] || [ "$ARCH" = "arm64" ] && PORTS=true
+
+UBUSRC=http://archive.ubuntu.com/ubuntu
+$PORTS && UBUSRC=http://ports.ubuntu.com/
+
 if [ "$UPSTREAM" = "upstream" ];then
 REPO=http://archive.ubuntu.com/ubuntu
+$PORTS && REPO=$UBUSRC
 else
 REPO=http://archive.trisquel.org/trisquel
 fi
@@ -68,12 +73,21 @@ if [ "$UPSTREAM" = "upstream" ];then
     LATEST_LTS_KEYRING="http://archive.ubuntu.com/ubuntu/pool/main/u/ubuntu-keyring/ubuntu-keyring_2021.03.26.tar.gz"
     KEYRING_PATH="ubuntu-keyring-2021.03.26/keyrings"
     KEYRING_FILE="ubuntu-archive-keyring.gpg"
+    DBSTRAP_SCRIPTS="/usr/share/debootstrap/scripts"
     curl -s -4  $LATEST_LTS_KEYRING | tar xvfz  - $KEYRING_PATH/$KEYRING_FILE
     mv $KEYRING_PATH/$KEYRING_FILE $TMP_KEY/$KEYRING_FILE
     rm -r $(dirname $KEYRING_PATH)
     PRE_BUILD_KEYRING="--keyring=$TMP_KEY/$KEYRING_FILE"
-    [ -f /usr/share/debootstrap/scripts/$CODENAME ] && rm /usr/share/debootstrap/scripts/$CODENAME
-    ln -s /usr/share/debootstrap/scripts/trisquel /usr/share/debootstrap/scripts/$CODENAME
+    if [ ! -f $DBSTRAP_SCRIPTS/$CODENAME ];then
+        if [ -f  $DBSTRAP_SCRIPTS/trisquel ]; then
+            ln -s $DBSTRAP_SCRIPTS/trisquel $DBSTRAP_SCRIPTS/$CODENAME
+        elif [ -f $DBSTRAP_SCRIPTS/gutsy ]; then
+            ln -s $DBSTRAP_SCRIPTS/gutsy $DBSTRAP_SCRIPTS/$CODENAME
+        else
+           echo "No option available"
+           exit
+        fi
+    fi
 fi
 
 debootstrap --arch=$ARCH --variant=minbase --components=main $PRE_BUILD_KEYRING --include=apt $CODENAME $SBUILD_CREATE_DIR $REPO
@@ -145,9 +159,6 @@ rm /finish.sh
 echo Finished self-setup
 MAINEOF
 
-UBUSRC=archive.ubuntu.com/ubuntu
-$PORTS && UBUSRC=ports.ubuntu.com/
-
 cat << EOF > $SBUILD_CREATE_DIR/etc/apt/sources.list
 deb $REPO $CODENAME main $UNIVERSE
 deb $REPO $CODENAME-updates main $UNIVERSE
@@ -165,9 +176,9 @@ deb http://builds.trisquel.org/repos/$CODENAME/ $CODENAME main
 deb http://builds.trisquel.org/repos/$CODENAME/ $CODENAME-security main
 
 #Ubuntu sources (only source packages)
-deb-src http://$UBUSRC $UBURELEASE main universe
-deb-src http://$UBUSRC $UBURELEASE-updates main universe
-deb-src http://$UBUSRC $UBURELEASE-security main universe
+deb-src $UBUSRC $UBURELEASE main universe
+deb-src $UBUSRC $UBURELEASE-updates main universe
+deb-src $UBUSRC $UBURELEASE-security main universe
 
 EOF
 fi
