@@ -56,12 +56,14 @@ fi
 [ "$CODENAME" == "flidas" ] && UBURELEASE=xenial
 [ "$CODENAME" == "belenos" ] && UBURELEASE=trusty
 
+CA_BASE="$CODENAME-$ARCH"
+SBUILD_CREATE_DIR="/tmp/sbuild-create/$CA_BASE"
+
 if [ "$UPSTREAM" = "upstream" ];then
 CODENAME=$UBURELEASE
 UNIVERSE="universe"
 fi
 
-SBUILD_CREATE_DIR="/tmp/sbuild-create/$CODENAME-$ARCH"
 umount $SBUILD_CREATE_DIR/proc || true
 umount $SBUILD_CREATE_DIR/ || true
 rm -rf $SBUILD_CREATE_DIR
@@ -187,22 +189,22 @@ mount -o bind /proc $SBUILD_CREATE_DIR/proc
 chroot $SBUILD_CREATE_DIR bash -x /finish.sh
 umount $SBUILD_CREATE_DIR/proc
 
-rm -rf /var/lib/schroot/chroots/$CODENAME-$ARCH
+rm -rf /var/lib/schroot/chroots/$CA_BASE
 [ -d /var/lib/schroot/chroots ] || mkdir /var/lib/schroot/chroots
-cp -a $SBUILD_CREATE_DIR /var/lib/schroot/chroots/$CODENAME-$ARCH
+cp -a $SBUILD_CREATE_DIR /var/lib/schroot/chroots/$CA_BASE
 umount $SBUILD_CREATE_DIR
 rm -r $SBUILD_CREATE_DIR
 
-cat << EOF > /etc/schroot/chroot.d/sbuild-$CODENAME-$ARCH
-[$CODENAME-$ARCH]
-description=$CODENAME-$ARCH
+cat << EOF > /etc/schroot/chroot.d/sbuild-$CA_BASE
+[$CA_BASE]
+description=$CODENAME-$ARCH $UPSTREAM build.
 groups=sbuild,root
 root-groups=sbuild,root
 source-root-groups=sbuild,root
 type=directory
 profile=sbuild
 union-type=overlay
-directory=/var/lib/schroot/chroots/$CODENAME-$ARCH
+directory=/var/lib/schroot/chroots/$CA_BASE
 command-prefix=linux$BITS
 EOF
 
@@ -236,7 +238,8 @@ if [ "$UPSTREAM" = "upstream" ];then
     [ -f /usr/share/debootstrap/scripts/$CODENAME ] && rm /usr/share/debootstrap/scripts/$CODENAME
 fi
 
-sbuild-update -udcar $CODENAME-$ARCH
+sbuild-update -udcar $CA_BASE
 
 echo "Setup of schroot $CODENAME-$ARCH finished successfully"
+
 
