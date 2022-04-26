@@ -139,7 +139,8 @@ echo set debconf/frontend Noninteractive | debconf-communicate
 echo set debconf/priority critical | debconf-communicate
 # Install basic build tool set, trying to match buildd
 apt-get -y --force-yes install build-essential
-apt-get -y --force-yes install --no-install-recommends fakeroot apt-utils aptitude pkgbinarymangler apt devscripts zip unzip quilt wget lsb-release gnupg
+apt-get -y --force-yes install --no-install-recommends fakeroot apt-utils pkgbinarymangler apt devscripts zip unzip quilt wget lsb-release gnupg
+apt-get -y --force-yes install --no-install-recommends aptitude || true
 
 #Add keys to upstream schroot (first get universe requirements).
 if [ "$UPSTREAM" = "upstream" ]; then
