@@ -4,7 +4,7 @@
 
   - Install sbuild:
 
-        sudo apt-get install sbuild schroot debootstrap eatmydata
+        sudo apt-get install sbuild schroot debootstrap eatmydata zstd
 
   - Configure schroot fstab for ccache
 
