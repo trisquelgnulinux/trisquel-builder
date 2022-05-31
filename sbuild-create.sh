@@ -81,8 +81,7 @@ if [ "$HOST_OS" = Debian ] && \
    version_gt 1.0.124 "$DBSTRAP_VER" && \
    [ "$CODENAME" = aramo ];then
     echo "It is required to upgrade debootstrap to create a $CODENAME jail, upgrading..."
-cat << REPO >> /etc/apt/sources.list
-
+cat << REPO >> /etc/apt/sources.list.d/debootstrap.list
 #Pinned repo (see /etc/apt/preferences.d/debootstrap).
 deb http://deb.debian.org/debian bullseye-backports main
 REPO
@@ -93,6 +92,24 @@ Pin: release n=bullseye-backports
 Pin-Priority: 1
 DBST
     apt-get -t bullseye-backports install debootstrap
+fi
+
+if [ "$HOST_OS" = Ubuntu ] && \
+   version_gt 1.0.124 "$DBSTRAP_VER" && \
+   [ "$CODENAME" = aramo ];then
+    echo "It is required to upgrade debootstrap to create the $CODENAME jail, upgrading..."
+"$PORTS" && BIN_URL="ubuntu-ports"
+cat << REPO > /etc/apt/sources.list.d/debootstrap.list
+#Pinned repo (see /etc/apt/preferences.d/debootstrap).
+deb $REPO$BIN_URL jammy main universe
+REPO
+    apt update -q2
+cat << DBST > /etc/apt/preferences.d/debootstrap
+Package: *
+Pin: release n=jammy
+Pin-Priority: 1
+DBST
+    apt-get -t jammy install debootstrap
 fi
 
 CA_BASE="$CODENAME-$ARCH"
@@ -144,7 +161,7 @@ if [ "$HOST_OS" != "Trisquel" ];then
         [ ! -f "$DBSTRAP_SCRIPTS"/"$CODENAME"     ] && curl -s -4 "$DBSTAP_TRISQUEL" > "$DBSTRAP_SCRIPTS"/"$CODENAME"
         [ ! -f "$DBSTRAP_SCRIPTS"/trisquel-common ] && curl -s -4 "$DBSTRAP_TRIS_COM" > "$DBSTRAP_SCRIPTS"/trisquel-common
     elif [ "$UPSTREAM" = upstream ];then
-        apt install -y ubuntu-archive-keyring
+        apt install -y ubuntu-keyring
         PRE_BUILD_KEYRING="--keyring=/usr/share/keyrings/ubuntu-archive-keyring.gpg"
         [ ! -f "$DBSTRAP_SCRIPTS"/"$CODENAME" ] && ln -s "$DBSTRAP_SCRIPTS"/gutsy "$DBSTRAP_SCRIPTS"/"$CODENAME"
     fi
@@ -166,9 +183,7 @@ debootstrap --arch="$ARCH" \
             "$CODENAME" \
             "$SBUILD_CREATE_DIR" "$REPO"
 
-if [ -z "$UPSTREAM" ];then
 wget http://builds.trisquel.org/repos/signkey.asc  -O "$SBUILD_CREATE_DIR"/tmp/key.asc
-fi
 
 cat << MAINEOF > "$SBUILD_CREATE_DIR"/finish.sh
 #!/bin/bash
@@ -223,8 +238,9 @@ apt-get -y --force-yes install --no-install-recommends fakeroot apt-utils apt de
 apt-get -y --force-yes install --no-install-recommends aptitude pkgbinarymangler || true
 
 #Add keys to upstream schroot (first get universe requirements).
-if [ "$UPSTREAM" = "upstream" ] && [ "$UPSTREAM" = "debian" ]; then
+if [ "$UPSTREAM" = "upstream" ] || [ "$UPSTREAM" = "debian" ]; then
 add_sbuild_keys
+cat /tmp/key.asc | gpg --dearmor | tee /etc/apt/trusted.gpg.d/builds-repo-key.gpg  >/dev/null
 fi
 
 # Set up expected /dev entries
@@ -251,12 +267,12 @@ deb-src $REPO $CODENAME main $UNIVERSE
 deb-src $REPO $CODENAME-updates main $UNIVERSE
 deb-src $REPO $CODENAME-security main $UNIVERSE
 
+#Trisquel builds repositories
+#deb http://builds.trisquel.org/repos/$(cut -d '-' -f1 <<< "$CA_BASE")/ $(cut -d '-' -f1 <<< "$CA_BASE") main
+#deb http://builds.trisquel.org/repos/$(cut -d '-' -f1 <<< "$CA_BASE")/ $(cut -d '-' -f1 <<< "$CA_BASE")-security main
 EOF
 if [ "$UPSTREAM" != "upstream" ];then
 cat << EOF >> "$SBUILD_CREATE_DIR"/etc/apt/sources.list
-#Trisquel builds repositories
-deb http://builds.trisquel.org/repos/$CODENAME/ $CODENAME main
-deb http://builds.trisquel.org/repos/$CODENAME/ $CODENAME-security main
 
 #Ubuntu sources (only source packages)
 deb-src $UBUSRC $UBURELEASE main universe
@@ -301,6 +317,8 @@ EOF
 fi
 mount -o bind /proc "$SBUILD_CREATE_DIR"/proc
 chroot "$SBUILD_CREATE_DIR" bash -x /finish.sh
+#Enable builds.trisquel.org repo
+chroot "$SBUILD_CREATE_DIR" sed -i '/builds.trisquel.org/s|^#||g' /etc/apt/sources.list
 umount "$SBUILD_CREATE_DIR"/proc
 
 rm -rf /var/lib/schroot/chroots/"$CA_BASE"
@@ -355,6 +373,6 @@ fi
 
 sbuild-update -udcar "$CA_BASE"
 
-echo "Setup of schroot $CODENAME-$ARCH finished successfully"
+echo "Setup of schroot $CA_BASE finished successfully"
 
 
