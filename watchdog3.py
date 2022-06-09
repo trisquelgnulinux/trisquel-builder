@@ -25,7 +25,8 @@ import apt
 
 TRISQUELRELEASES = {
     'etiona': {'version': '9.0', 'codename': 'etiona', 'upstream': 'bionic'},
-    'nabia': {'version': '10.0', 'codename': 'nabia', 'upstream': 'focal'}
+    'nabia': {'version': '10.0', 'codename': 'nabia', 'upstream': 'focal'},
+    'aramo': {'version': '11.0', 'codename': 'aramo', 'upstream': 'jammy'}
     }
 
 TRISQUEL_REPO_KEY = "B138CA450C05112F"
