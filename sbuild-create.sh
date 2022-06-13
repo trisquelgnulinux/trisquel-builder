@@ -202,6 +202,7 @@ add_sbuild_keys() {
 # Install ubuntu build keys
 apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 40976EAF437D05B5
 apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 3B4FE6ACC0B21F32
+apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 871920D1991BC93C
 # Trisquel keys
 apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 33C66596
 apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 0C05112F
