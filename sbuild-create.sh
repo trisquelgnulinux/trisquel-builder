@@ -42,9 +42,9 @@ ARCH="$2"
 UPSTREAM="$3"
 
 [ "$ARCH" = "i386"  ] || [ "$ARCH" = "armhf" ] && BITS=32
-[ "$ARCH" = "amd64" ] || [ "$ARCH" = "arm64" ] && BITS=64
+[ "$ARCH" = "amd64" ] || [ "$ARCH" = "arm64" ] || [ "$ARCH" = "ppc64el" ] && BITS=64
 PORTS=false
-[ "$ARCH" = "armhf" ] || [ "$ARCH" = "arm64" ] && PORTS=true
+[ "$ARCH" = "armhf" ] || [ "$ARCH" = "arm64" ] || [ "$ARCH" = "ppc64el" ] && PORTS=true
 
 [ "$CODENAME" == "buster"   ] && UPSTREAM="debian" && VALID=1
 [ "$CODENAME" == "bullseye" ] && UPSTREAM="debian" && VALID=1
