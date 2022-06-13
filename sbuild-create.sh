@@ -176,6 +176,7 @@ if [ "$UPSTREAM" = "debian" ];then
 fi
 
 debootstrap --arch="$ARCH" \
+	    --extractor=ar \
             --variant=minbase \
             --components=main \
             "$PRE_BUILD_KEYRING" \
