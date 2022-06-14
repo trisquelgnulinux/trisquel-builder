@@ -36,6 +36,11 @@ if [ $# -lt 2 ] && [ $# -gt 3 ]; then
 fi
 
 set -e
+#Clean previous setup.
+[ -f /etc/apt/sources.list.d/debootstrap.list ] && \
+rm /etc/apt/sources.list.d/debootstrap.list
+[ -f /etc/apt/preferences.d/debootstrap ] && \
+rm /etc/apt/preferences.d/debootstrap
 
 CODENAME="$1"
 ARCH="$2"
@@ -81,10 +86,10 @@ if [ "$HOST_OS" = Debian ] && \
    version_gt 1.0.124 "$DBSTRAP_VER" && \
    [ "$CODENAME" = aramo ];then
     echo "It is required to upgrade debootstrap to create a $CODENAME jail, upgrading..."
-cat << REPO >> /etc/apt/sources.list.d/debootstrap.list
+cat << DBST_REPO >> /etc/apt/sources.list.d/debootstrap.list
 #Pinned repo (see /etc/apt/preferences.d/debootstrap).
 deb http://deb.debian.org/debian bullseye-backports main
-REPO
+DBST_REPO
     apt update -q2
 cat << DBST > /etc/apt/preferences.d/debootstrap
 Package: *
@@ -94,22 +99,26 @@ DBST
     apt-get -t bullseye-backports install debootstrap
 fi
 
-if [ "$HOST_OS" = Ubuntu ] && \
+if [ "$HOST_OS" != Debian ] && \
    version_gt 1.0.124 "$DBSTRAP_VER" && \
    [ "$CODENAME" = aramo ];then
     echo "It is required to upgrade debootstrap to create the $CODENAME jail, upgrading..."
-"$PORTS" && BIN_URL="ubuntu-ports"
-cat << REPO > /etc/apt/sources.list.d/debootstrap.list
+#Add variables to meet OS.
+[ "$HOST_OS" = "Trisquel" ] && REPO_ARCHIVE="$REPO" && REPO_DIST="$CODENAME"
+[ "$HOST_OS" = "Ubuntu" ] && REPO_ARCHIVE="$UBUSRC" && REPO_DIST="$UBURELEASE"
+"$PORTS" && REPO_ARCHIVE=$UBUSRC && BIN_URL="ubuntu-ports"
+#Set custom OS backport repository.
+cat << DBST_REPO > /etc/apt/sources.list.d/debootstrap.list
 #Pinned repo (see /etc/apt/preferences.d/debootstrap).
-deb $REPO$BIN_URL jammy main universe
-REPO
-    apt update -q2
+deb $REPO_ARCHIVE$BIN_URL $REPO_DIST main
+DBST_REPO
 cat << DBST > /etc/apt/preferences.d/debootstrap
 Package: *
-Pin: release n=jammy
+Pin: release n=$REPO_DIST
 Pin-Priority: 1
 DBST
-    apt-get -t jammy install debootstrap
+    apt update -q2
+    apt-get -t "$REPO_DIST" install --reinstall debootstrap
 fi
 
 CA_BASE="$CODENAME-$ARCH"
