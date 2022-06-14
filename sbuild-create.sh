@@ -175,6 +175,7 @@ if [ "$UPSTREAM" = "debian" ];then
     [ ! -f "$DBSTRAP_SCRIPTS"/debian-common ] && curl -s -4 "$DBSTRAP_DEB_COM" > "$DBSTRAP_SCRIPTS"/debian-common
 fi
 
+[ -z "$PRE_BUILD_KEYRING" ] && PRE_BUILD_KEYRING="--verbose"
 debootstrap --arch="$ARCH" \
 	    --extractor=ar \
             --variant=minbase \
