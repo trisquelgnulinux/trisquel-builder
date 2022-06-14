@@ -78,7 +78,7 @@ if [ "$VALID" != 1 ];then
 fi
 
 HOST_OS="$(lsb_release -si)"
-DBSTRAP_VER="$(apt-cache madison debootstrap | sort -r | awk 'NR==1{print$3}')"
+DBSTRAP_VER="$(dpkg-query -s debootstrap 2>/dev/null|awk '/Version/{print$2}')"
 echo -e "\\nOS: $HOST_OS \\ndebootstrap: $DBSTRAP_VER\\n"
 
 #Upgrade debian debootstrap package if required.
@@ -106,7 +106,7 @@ if [ "$HOST_OS" != Debian ] && \
 #Add variables to meet OS.
 [ "$HOST_OS" = "Trisquel" ] && REPO_ARCHIVE="$REPO" && REPO_DIST="$CODENAME"
 [ "$HOST_OS" = "Ubuntu" ] && REPO_ARCHIVE="$UBUSRC" && REPO_DIST="$UBURELEASE"
-"$PORTS" && REPO_ARCHIVE=$UBUSRC && BIN_URL="ubuntu-ports"
+"$PORTS" && BIN_URL="ubuntu-ports"
 #Set custom OS backport repository.
 cat << DBST_REPO > /etc/apt/sources.list.d/debootstrap.list
 #Pinned repo (see /etc/apt/preferences.d/debootstrap).
@@ -200,6 +200,7 @@ cat << MAINEOF > "$SBUILD_CREATE_DIR"/finish.sh
 #!/bin/bash
 set -x
 set -e
+TMP_GPG_REPO="$(mktemp)"
 if [ -n "" ]; then
    mkdir -p /etc/apt/apt.conf.d/
    cat > /etc/apt/apt.conf.d/99mk-sbuild-proxy <<EOF
@@ -208,24 +209,31 @@ Acquire { HTTP { Proxy ""; }; };
 EOF
 fi
 
+#Add gpg key via gpg server to keyring storage.
+add_gpg_keyring() {
+apt-key adv --recv-keys --keyserver keyserver.ubuntu.com \$1
+apt-key export \$1 | gpg --dearmour | tee $TMP_GPG_REPO/\$1.gpg >/dev/null
+apt-key del \$1
+mv $TMP_GPG_REPO/\$1.gpg /etc/apt/trusted.gpg.d/
+}
 add_sbuild_keys() {
 # Reload package lists
-# Install ubuntu build keys
-apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 40976EAF437D05B5
-apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 3B4FE6ACC0B21F32
-apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 871920D1991BC93C
+# Install Ubuntu build keys
+add_gpg_keyring 40976EAF437D05B5
+add_gpg_keyring 3B4FE6ACC0B21F32
+add_gpg_keyring 871920D1991BC93C
 # Trisquel keys
-apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 33C66596
-apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 0C05112F
-apt-key adv --recv-keys --keyserver keyserver.ubuntu.com FED8FD3E
-#Debian
-apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 9D6D8F6BC857C906
-apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 8B48AD6246925553
-apt-key adv --recv-keys --keyserver keyserver.ubuntu.com DCC9EFBF77E11517
-apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 648ACFD622F3D138
-apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 54404762BBB6E853
-apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 605C66F00D6C9793
-apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 0E98404D386FA1D9
+add_gpg_keyring 92D284CF33C66596
+add_gpg_keyring B138CA450C05112F
+add_gpg_keyring FED8FD3E
+# Debian
+add_gpg_keyring 9D6D8F6BC857C906
+add_gpg_keyring 8B48AD6246925553
+add_gpg_keyring DCC9EFBF77E11517
+add_gpg_keyring 648ACFD622F3D138
+add_gpg_keyring 54404762BBB6E853
+add_gpg_keyring 605C66F00D6C9793
+add_gpg_keyring 0E98404D386FA1D9
 }
 
 echo "force-unsafe-io" > /etc/dpkg/dpkg.cfg.d/force-unsafe-io
@@ -244,10 +252,19 @@ apt-get update
 # Disable debconf questions so that automated builds won't prompt
 echo set debconf/frontend Noninteractive | debconf-communicate
 echo set debconf/priority critical | debconf-communicate
-# Install basic build tool set, trying to match buildd
-apt-get -y --force-yes install build-essential
-apt-get -y --force-yes install --no-install-recommends fakeroot apt-utils apt zip unzip quilt wget lsb-release gnupg
-apt-get -y --force-yes install --no-install-recommends aptitude pkgbinarymangler || true
+# Install basic build tool set, trying to match build
+apt-get -y  --allow-downgrades \
+            --allow-remove-essential \
+            --allow-change-held-packages \
+            install build-essential
+apt-get -y  --allow-downgrades \
+            --allow-remove-essential \
+            --allow-change-held-packages \
+            install --no-install-recommends fakeroot apt-utils apt zip unzip quilt wget lsb-release gnupg
+apt-get -y  --allow-downgrades \
+            --allow-remove-essential \
+            --allow-change-held-packages \
+            install --no-install-recommends aptitude pkgbinarymangler || true
 
 #Add keys to upstream schroot (first get universe requirements).
 if [ "$UPSTREAM" = "upstream" ] || [ "$UPSTREAM" = "debian" ]; then
@@ -260,7 +277,10 @@ if [ ! -r /dev/stdin ];  then ln -sf /proc/self/fd/0 /dev/stdin;  fi
 if [ ! -r /dev/stdout ]; then ln -sf /proc/self/fd/1 /dev/stdout; fi
 if [ ! -r /dev/stderr ]; then ln -sf /proc/self/fd/2 /dev/stderr; fi
 
-apt-get -y --force-yes dist-upgrade
+apt-get -y  --allow-downgrades \
+            --allow-remove-essential \
+            --allow-change-held-packages \
+            dist-upgrade
 apt-get clean
 echo "dash dash/sh boolean false" | debconf-set-selections
 DEBIAN_FRONTEND=noninteractive dpkg-reconfigure dash
