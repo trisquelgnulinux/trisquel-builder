@@ -260,7 +260,7 @@ apt-get -y  --allow-downgrades \
 apt-get -y  --allow-downgrades \
             --allow-remove-essential \
             --allow-change-held-packages \
-            install --no-install-recommends fakeroot apt-utils apt zip unzip quilt wget lsb-release gnupg
+            install --no-install-recommends fakeroot apt-utils apt zip unzip quilt wget lsb-release gnupg eatmydata
 apt-get -y  --allow-downgrades \
             --allow-remove-essential \
             --allow-change-held-packages \
@@ -367,9 +367,9 @@ root-groups=sbuild,root
 source-root-groups=sbuild,root
 type=directory
 profile=sbuild
-union-type=overlay
+#union-type=overlay
 directory=/var/lib/schroot/chroots/$CA_BASE
-command-prefix=linux$BITS
+command-prefix=linux$BITS,eatmydata
 EOF
 
 if ! [ -e /etc/schroot/setup.d/04tmpfs ]; then
