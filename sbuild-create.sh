@@ -285,6 +285,9 @@ apt-get clean
 echo "dash dash/sh boolean false" | debconf-set-selections
 DEBIAN_FRONTEND=noninteractive dpkg-reconfigure dash
 
+# Ensure resolf.conf is not a symlink
+sed '' -i /etc/resolv.conf
+
 # Clean up
 rm /finish.sh
 echo Finished self-setup
