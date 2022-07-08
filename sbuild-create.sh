@@ -184,9 +184,12 @@ if [ "$UPSTREAM" = "debian" ];then
     [ ! -f "$DBSTRAP_SCRIPTS"/debian-common ] && curl -s -4 "$DBSTRAP_DEB_COM" > "$DBSTRAP_SCRIPTS"/debian-common
 fi
 
+EXTRACTOR="dpkg-deb"
+[ "$ARCH" = "ppc64el" ] && EXTRACTOR=ar
+
 [ -z "$PRE_BUILD_KEYRING" ] && PRE_BUILD_KEYRING="--verbose"
 debootstrap --arch="$ARCH" \
-	    --extractor=ar \
+	    --extractor=$EXTRACTOR \
             --variant=minbase \
             --components=main \
             "$PRE_BUILD_KEYRING" \
