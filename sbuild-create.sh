@@ -370,6 +370,7 @@ cat << EOF > /etc/schroot/chroot.d/sbuild-"$CA_BASE"
 description=$CODENAME-$ARCH $UPSTREAM build.
 groups=sbuild,root
 root-groups=sbuild,root
+source-root-groups=root,sbuild
 type=directory
 profile=sbuild
 union-type=overlay
