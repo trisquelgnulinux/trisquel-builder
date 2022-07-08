@@ -376,8 +376,6 @@ EOF
 
 rm -f /etc/schroot/setup.d/04tmpfs
 
-chmod a+rx /etc/schroot/setup.d/04tmpfs
-
 if [ "$UPSTREAM" = "upstream" ] || [ "$UPSTREAM" = "debian" ];then
     [ -f /usr/share/debootstrap/scripts/$CODENAME ] && rm /usr/share/debootstrap/scripts/$CODENAME
     [ -f /usr/share/debootstrap/scripts/debian-common ] && rm /usr/share/debootstrap/scripts/debian-common
