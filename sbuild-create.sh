@@ -367,39 +367,16 @@ cat << EOF > /etc/schroot/chroot.d/sbuild-"$CA_BASE"
 description=$CODENAME-$ARCH $UPSTREAM build.
 groups=sbuild,root
 root-groups=sbuild,root
-source-root-groups=sbuild,root
 type=directory
 profile=sbuild
-#union-type=overlay
+union-type=overlay
 directory=/var/lib/schroot/chroots/$CA_BASE
 command-prefix=linux$BITS,eatmydata
 EOF
 
-if ! [ -e /etc/schroot/setup.d/04tmpfs ]; then
-cat >/etc/schroot/setup.d/04tmpfs <<"END"
-#!/bin/sh
+rm -f /etc/schroot/setup.d/04tmpfs
 
-set -e
-
-. "$SETUP_DATA_DIR/common-data"
-. "$SETUP_DATA_DIR/common-functions"
-. "$SETUP_DATA_DIR/common-config"
-
-MEM=$(free --giga |grep Mem: |awk '{print $2}')
-[ $MEM -lt 30 ] || exit 0
-SIZE=$(expr ${MEM}00 / 110)
-
-if [ "$STAGE" = "setup-start" ]; then
-  mount -t tmpfs overlay /var/lib/schroot/union/overlay -o size=${SIZE}G
-elif [ "$STAGE" = "setup-recover" ]; then
-  mount -t tmpfs overlay /var/lib/schroot/union/overlay -o size=${SIZE}G
-elif [ "$STAGE" = "setup-stop" ]; then
-  umount -f /var/lib/schroot/union/overlay
-fi
-END
 chmod a+rx /etc/schroot/setup.d/04tmpfs
-
-fi
 
 if [ "$UPSTREAM" = "upstream" ] || [ "$UPSTREAM" = "debian" ];then
     [ -f /usr/share/debootstrap/scripts/$CODENAME ] && rm /usr/share/debootstrap/scripts/$CODENAME
