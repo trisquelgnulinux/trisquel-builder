@@ -98,7 +98,7 @@ def list_helper_packages(release):
     for i, path in enumerate(paths):
         if path == "DATA" or path == "config":
             continue
-        packages.append(path.replace("make-", ""))
+        packages.append(path.replace("make-", "", 1))
 
     return packages
 
