@@ -33,21 +33,6 @@ TRISQUEL_REPO_KEY = "B138CA450C05112F"
 BUILDS_REPO_KEY = "CFB708E203134F62"
 UBUNTU_REPO_KEY = "3B4FE6ACC0B21F32"
 
-parser = argparse.ArgumentParser(description=("Identify packages out-of-sync between "
-                                              "upstream and Trisquel"))
-parser.add_argument('release',
-                    help=("Trisquel release to check. Releases known by this script: %s"
-                          % ', '.join(TRISQUELRELEASES.keys())),
-                    nargs='*', default="")
-parser.add_argument('--working_directory',
-                    help=("Directory to clone package helpers and create apt configuration"),
-                    nargs='?', default=os.getcwd())
-parser.add_argument('--debug', help="Enable degugging printing",
-                    default=False, action='store_true')
-parser.add_argument('--check_gpg', help="Retrieve and check gpg keys for each repository",
-                    default=False, action='store_true')
-args = parser.parse_args()
-
 
 def debug(string):
     if args.debug:
@@ -198,7 +183,6 @@ def build_cache(name, uri, suites, components, release, keyid):
         cache.update(raise_on_error=True)
     except apt.cache.FetchFailedException:
         debug("E: apt.Cache for %s failed to build" % name)
-        #raise
         return None
     try:
         src = apt_pkg.SourceRecords()
@@ -352,7 +336,21 @@ def check_distro(release):
                 check_versions(cache["trisquel"], cache_external, helper_info, package, release)
 
 
-if __name__ == '__main__' and args.release:
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=("Identify packages out-of-sync between "
+                                                  "upstream and Trisquel"))
+    parser.add_argument('release',
+                        help=("Trisquel release to check. Releases known by this script: %s"
+                              % ', '.join(TRISQUELRELEASES.keys())),
+                        nargs='+', default="")
+    parser.add_argument('--working_directory',
+                        help=("Directory to clone package helpers and create apt configuration"),
+                        nargs='?', default=os.getcwd())
+    parser.add_argument('--debug', help="Enable degugging printing",
+                        default=False, action='store_true')
+    parser.add_argument('--check_gpg', help="Retrieve and check gpg keys for each repository",
+                        default=False, action='store_true')
+    args = parser.parse_args()
     try:
         for release in args.release:
             check_distro(release)
