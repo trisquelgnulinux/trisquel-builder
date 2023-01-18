@@ -336,9 +336,8 @@ def check_distro(release):
                 check_versions(cache["trisquel"], cache_external, helper_info, package, release)
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description=("Identify packages out-of-sync between "
-                                                  "upstream and Trisquel"))
+def setup(desc):
+    parser = argparse.ArgumentParser(description=desc)
     parser.add_argument('release',
                         help=("Trisquel release to check. Releases known by this script: %s"
                               % ', '.join(TRISQUELRELEASES.keys())),
@@ -350,7 +349,11 @@ if __name__ == '__main__':
                         default=False, action='store_true')
     parser.add_argument('--check_gpg', help="Retrieve and check gpg keys for each repository",
                         default=False, action='store_true')
-    args = parser.parse_args()
+    return parser.parse_args()
+
+
+if __name__ == '__main__':
+    args = setup("Identify packages out-of-sync between upstream and Trisquel")
     try:
         for release in args.release:
             check_distro(release)
