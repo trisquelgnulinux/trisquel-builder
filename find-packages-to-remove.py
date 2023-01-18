@@ -19,7 +19,7 @@
 import argparse
 
 import watchdog3
-from watchdog3 import build_cache, list_helper_packages
+from watchdog3 import build_cache, list_helper_packages, list_src
 from watchdog3 import TRISQUELRELEASES, TRISQUEL_REPO_KEY, UBUNTU_REPO_KEY
 
 watchdog3.args = watchdog3.setup("Find packages that were removed from the Ubuntu \
@@ -42,16 +42,8 @@ cache["ubuntu"] = build_cache("ubuntu",
 
 helpers = list_helper_packages(release)
 
-tpackages = []
-upackages = []
-while cache["trisquel"]["source_records"].step():
-    tpackages.append(cache["trisquel"]["source_records"].package)
-while cache["ubuntu"]["source_records"].step():
-    upackages.append(cache["ubuntu"]["source_records"].package)
-
-# remove dupes preserving order
-tpackages = list(dict.fromkeys(tpackages))
-upackages = list(dict.fromkeys(upackages))
+tpackages = list_src(cache["trisquel"]["source_records"])
+upackages = list_src(cache["ubuntu"]["source_records"])
 
 for pkg in tpackages:
     if pkg not in helpers and pkg not in upackages \

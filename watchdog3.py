@@ -209,6 +209,20 @@ def lookup_src(cache, package):
     return version
 
 
+def list_src(cache):
+    """
+    Returns a list of all the source package names in a cache
+    """
+    packages = []
+    while cache.step():
+        packages.append(cache.package)
+
+    # remove dupes preserving order
+    packages = list(dict.fromkeys(packages))
+
+    return packages
+
+
 def compare_versions(helper_info, tresult, uresult, package, release, cache):
     """
     Compares two package version strings and calculates if new versions need to be built
