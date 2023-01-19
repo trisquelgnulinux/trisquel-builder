@@ -185,6 +185,7 @@ def build_cache(name, uri, suites, components, release, keyid, binaries=False):
     cache = apt.Cache()
     try:
         cache.update(raise_on_error=True)
+        cache.open()
     except apt.cache.FetchFailedException:
         debug("E: apt.Cache for %s failed to build" % name)
         return None
