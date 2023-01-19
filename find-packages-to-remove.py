@@ -19,7 +19,7 @@
 import argparse
 
 import watchdog3
-from watchdog3 import build_cache, list_helper_packages, list_src
+from watchdog3 import build_cache, list_helper_packages, list_src, list_binaries, source_binary
 from watchdog3 import TRISQUELRELEASES, TRISQUEL_REPO_KEY, UBUNTU_REPO_KEY
 
 watchdog3.args = watchdog3.setup("Find packages that were removed from the Ubuntu \
@@ -33,23 +33,50 @@ cache["trisquel"] = build_cache("trisquel",
                                 "http://archive.trisquel.org/trisquel",
                                 [release, "%s-updates" % release,
                                  "%s-security" % release],
-                                "main", release, TRISQUEL_REPO_KEY)
+                                "main", release, TRISQUEL_REPO_KEY, True)
 cache["ubuntu"] = build_cache("ubuntu",
                               "http://archive.ubuntu.com/ubuntu",
                               [upstream, "%s-updates" % upstream,
                                "%s-security" % upstream],
-                              "main universe", release, UBUNTU_REPO_KEY)
+                              "main universe", release, UBUNTU_REPO_KEY, True)
 
 helpers = list_helper_packages(release)
 
-tpackages = list_src(cache["trisquel"]["source_records"])
-upackages = list_src(cache["ubuntu"]["source_records"])
+tsrc = list_src(cache["trisquel"]["source_records"])
+usrc = list_src(cache["ubuntu"]["source_records"])
+tbin = list_binaries(cache["trisquel"]["cache"])
+ubin = list_binaries(cache["ubuntu"]["cache"])
 
-for pkg in tpackages:
-    if pkg not in helpers and pkg not in upackages \
-      and "trisquel" not in pkg \
-      and "sugar-activity" not in pkg \
-      and "app-install-data" not in pkg \
-      and "atheros-firmware" not in pkg \
-      and "openfwwf" not in pkg:
-        print(pkg)
+srclist = []
+
+for src in tsrc:
+    if src not in helpers \
+       and src not in usrc \
+       and "trisquel" not in src \
+       and "sugar-activity" not in src \
+       and "app-install-data" not in src \
+       and "atheros-firmware" not in src \
+       and "openfwwf" not in src:
+        if src not in srclist:
+            srclist.append(src)
+
+for src in srclist:
+    print("src: %s" % src)
+
+pkglist = []
+
+for pkg in tbin:
+    if pkg not in ubin:
+        src = source_binary(pkg, cache["trisquel"]['cache'])
+        if src not in srclist \
+           and src not in helpers \
+           and "trisquel" not in src \
+           and "sugar-activity" not in src \
+           and "app-install-data" not in src \
+           and "atheros-firmware" not in src \
+           and "openfwwf" not in src:
+            if pkg not in pkglist:
+                pkglist.append(pkg)
+
+for pkg in pkglist:
+    print("pkg: %s" % pkg)
