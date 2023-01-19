@@ -120,34 +120,38 @@ def get_helper_info(release, package):
             "repokey": repokey}
 
 
-def make_sourceslist(name, uri, suites, components, release):
+def make_sourceslist(name, uri, suites, components, release, binaries=False):
     """
     Builds a sources.list file given its description as parameters
     """
+    types = ["deb-src"]
+    if binaries:
+        types = ["deb", "deb-src"]
     lines = []
-    for suite in suites:
-        lines.append("%s %s %s %s\n" % ("deb-src", uri, suite, components))
-    if name == 'trisquel':
-        lines.append("%s %s %s %s\n" %
-                     ("deb-src", "http://builds.trisquel.org/repos/%s" %
-                      release, release, components))
-        get_gpg_key(BUILDS_REPO_KEY, "%s/apt/%s/%s/etc/apt/trusted.gpg"
-                    % (args.working_directory, release, name))
-        lines.append("%s %s %s %s\n" %
-                     ("deb-src", "http://builds.trisquel.org/repos/%s" %
-                      release, "%s-security" % release, components))
-    if name == 'trisquel-backports':
-        get_gpg_key(BUILDS_REPO_KEY, "%s/apt/%s/%s/etc/apt/trusted.gpg"
-                    % (args.working_directory, release, name))
-        lines.append("%s %s %s %s\n" %
-                     ("deb-src", "http://builds.trisquel.org/repos/%s" %
-                      release, "%s-backports" % release, components))
-    f = open("%s/apt/%s/%s/etc/apt/sources.list" % (args.working_directory, release, name), "w")
+    for repotype in types:
+        for suite in suites:
+            lines.append("%s %s %s %s\n" % (repotype, uri, suite, components))
+        if name == 'trisquel':
+            lines.append("%s %s %s %s\n" %
+                         (repotype, "http://builds.trisquel.org/repos/%s" %
+                          release, release, components))
+            get_gpg_key(BUILDS_REPO_KEY, "%s/apt/%s/%s/etc/apt/trusted.gpg"
+                        % (args.working_directory, release, name))
+            lines.append("%s %s %s %s\n" %
+                         (repotype, "http://builds.trisquel.org/repos/%s" %
+                          release, "%s-security" % release, components))
+        if name == 'trisquel-backports':
+            get_gpg_key(BUILDS_REPO_KEY, "%s/apt/%s/%s/etc/apt/trusted.gpg"
+                        % (args.working_directory, release, name))
+            lines.append("%s %s %s %s\n" %
+                         (repotype, "http://builds.trisquel.org/repos/%s" %
+                          release, "%s-backports" % release, components))
+        f = open("%s/apt/%s/%s/etc/apt/sources.list" % (args.working_directory, release, name), "w")
     f.writelines(lines)
     f.close()
 
 
-def build_cache(name, uri, suites, components, release, keyid):
+def build_cache(name, uri, suites, components, release, keyid, binaries=False):
     """
     Builds an apt repository based on parameters
     Returns an apt.Cache object and a apt_pkg.SourceRecords object
@@ -176,7 +180,7 @@ def build_cache(name, uri, suites, components, release, keyid):
     apt_pkg.config.set("Dir::Etc::sourceparts", "%s/apt/%s/%s/etc/apt/sources.list.d"
                        % (args.working_directory, release, name))
     apt_pkg.config.set("Dir::State::status", "/dev/null")
-    make_sourceslist(name, uri, suites, components, release)
+    make_sourceslist(name, uri, suites, components, release, binaries)
     apt_pkg.init()
     cache = apt.Cache()
     try:
