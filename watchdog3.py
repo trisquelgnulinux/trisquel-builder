@@ -228,6 +228,24 @@ def list_src(cache):
     return packages
 
 
+def list_binaries(cache):
+    """
+    Returns a list of all the binary packages in a cache
+    """
+    packages = []
+    for package in cache:
+        packages.append(package.name)
+
+    # remove dupes preserving order
+    packages = list(dict.fromkeys(packages))
+
+    return packages
+
+
+def source_binary(packagename, cache):
+    return cache[packagename].candidate.source_name
+
+
 def compare_versions(helper_info, tresult, uresult, package, release, cache):
     """
     Compares two package version strings and calculates if new versions need to be built
