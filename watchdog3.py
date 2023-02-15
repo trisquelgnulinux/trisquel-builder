@@ -102,7 +102,10 @@ def get_helper_info(release, package):
     for line in helper.splitlines():
         if line.startswith("VERSION="):
             version = line.replace("VERSION=", "").replace("\n", "")
-            version = "+%strisquel%s" % (TRISQUELRELEASES[release]['version'], version)
+            if package == 'console-setup':
+                version = "-%strisquel%s" % (TRISQUELRELEASES[release]['version'], version)
+            else:
+                version = "+%strisquel%s" % (TRISQUELRELEASES[release]['version'], version)
         if line.startswith("EXTERNAL="):
             external = line.replace("EXTERNAL=", "")\
                 .replace("\n", "").replace('\'', '').replace('\"', '')
