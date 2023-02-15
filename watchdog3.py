@@ -211,6 +211,10 @@ def lookup_src(cache, package):
     version = 0
     newversion = 0
     while record.lookup(package):
+        # lookup matches by binary name or source name,
+        # we keep looking until we match exactly by source name
+        if record.package != package:
+            continue
         newversion = record.version
         if version == 0 or apt_pkg.version_compare(version, newversion) < 0:
             version = newversion
