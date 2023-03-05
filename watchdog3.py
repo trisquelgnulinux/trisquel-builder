@@ -270,7 +270,7 @@ def compare_versions(helper_info, tresult, uresult, package, release, cache):
                            "binary package exists but has no trisquel version") % package)
                     return
                 debug("Upstream version of %s: %s" % (basepackage, result))
-                abi = tresult.split(".")
+                abi = uresult.split(".")
                 abi = '.'.join(abi[0:4])
                 if abi not in result.replace("-", '.'):
                     print("W: Skipping building %s, binary package is out of date" % package)
