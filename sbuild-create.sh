@@ -56,6 +56,9 @@ PORTS=false
 [ "$CODENAME" == "bookworm" ] && UPSTREAM="debian" && VALID=1
 [ "$CODENAME" == "sid"      ] && UPSTREAM="debian" && VALID=1
 
+EATMYDATA=eatmydata
+[ "$BITS" == "32" ] && EATMYDATA=""
+
 UBUSRC=http://archive.ubuntu.com/ubuntu
 "$PORTS" && UBUSRC=http://ports.ubuntu.com/
 
@@ -263,7 +266,7 @@ apt-get -y  --allow-downgrades \
 apt-get -y  --allow-downgrades \
             --allow-remove-essential \
             --allow-change-held-packages \
-            install --no-install-recommends fakeroot apt-utils apt zip unzip quilt wget lsb-release gnupg eatmydata
+            install --no-install-recommends fakeroot apt-utils apt zip unzip quilt wget lsb-release gnupg $EATMYDATA
 apt-get -y  --allow-downgrades \
             --allow-remove-essential \
             --allow-change-held-packages \
@@ -375,7 +378,7 @@ type=directory
 profile=sbuild
 union-type=overlay
 directory=/var/lib/schroot/chroots/$CA_BASE
-command-prefix=linux$BITS,eatmydata
+command-prefix=linux$BITS,$EATMYDATA
 EOF
 
 rm -f /etc/schroot/setup.d/04tmpfs
