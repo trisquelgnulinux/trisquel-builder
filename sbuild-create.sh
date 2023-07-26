@@ -64,6 +64,7 @@ UBUSRC=http://archive.ubuntu.com/ubuntu
 
 if [ "$UPSTREAM" = "upstream" ];then
 REPO=http://archive.ubuntu.com/ubuntu
+TRISQUELREPO=http://archive.trisquel.org/trisquel
 "$PORTS" && REPO="$UBUSRC"
 elif [ "$UPSTREAM" = "debian" ]; then
 REPO=http://deb.debian.org/debian
@@ -128,6 +129,7 @@ CA_BASE="$CODENAME-$ARCH"
 SBUILD_CREATE_DIR="/tmp/sbuild-create/$CA_BASE"
 
 if [ "$UPSTREAM" = "upstream" ];then
+TRISQUELNAME="$CODENAME"
 CODENAME="$UBURELEASE"
 UNIVERSE="universe"
 fi
@@ -321,6 +323,16 @@ deb-src $UBUSRC $UBURELEASE-updates main universe
 deb-src $UBUSRC $UBURELEASE-security main universe
 
 EOF
+else
+cat << EOF >> "$SBUILD_CREATE_DIR"/etc/apt/sources.list
+
+#Trisquel sources (only source packages)
+#SRdeb-src $TRISQUELREPO $TRISQUELNAME main
+#SRdeb-src $TRISQUELREPO $TRISQUELNAME-updates main
+#SRdeb-src $TRISQUELREPO $TRISQUELNAME-security main
+
+EOF
+
 fi
 if [ "$UPSTREAM" = "debian" ];then
     if [ "$CODENAME" = "sid"      ]; then
@@ -358,8 +370,9 @@ EOF
 fi
 mount -o bind /proc "$SBUILD_CREATE_DIR"/proc
 chroot "$SBUILD_CREATE_DIR" bash -x /finish.sh
-#Enable builds.trisquel.org repo
+# Delayed enabled repos as ubuntu doesn't have gpg on main to add keys earlier.
 chroot "$SBUILD_CREATE_DIR" sed -i '/builds.trisquel.org/s|^#||g' /etc/apt/sources.list
+chroot "$SBUILD_CREATE_DIR" sed -i 's|^#SR||g' /etc/apt/sources.list
 umount "$SBUILD_CREATE_DIR"/proc
 
 rm -rf /var/lib/schroot/chroots/"$CA_BASE"
