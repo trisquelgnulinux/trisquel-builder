@@ -318,6 +318,9 @@ def check_versions(tcache, ucache, helper_info, package, release):
               % (package, uresult + helper_info['version'], release))
     if tresult and uresult:
         compare_versions(helper_info, tresult, uresult, package, release, tcache)
+        if uresult not in tresult:
+		    print ("> Warning: %s at %s, might be skipping version from %s"
+             % (package,tresult,uresult))
 
 
 def check_distro(release):
