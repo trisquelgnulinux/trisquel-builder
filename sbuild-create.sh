@@ -1,7 +1,7 @@
 #!/bin/bash
-
+#
 #    Copyright (C) 2018-2021  Ruben Rodriguez <ruben@trisquel.info>
-#    Copyright (C) 2022  Luis Guzman <ark@switnet.org>
+#    Copyright (C) 2024  Luis Guzman <ark@switnet.org>
 #
 #    This program is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -17,17 +17,17 @@
 #    along with this program; if not, write to the Free Software
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 
-#https://wiki.debian.org/sbuild
+# https://wiki.debian.org/sbuild
 
 # True if $1 is greater than $2
-version_gt() { test "$(printf '%s\n' "$@" | sort -V | head -n 1)" != "$1"; }
+version_gt() { dpkg --compare-versions "$1" gt "$2"; }
 
 if [ "$EUID" -ne 0 ]; then
    echo "This script must be run as root"
    exit 1
 fi
 
-if [ $# -lt 2 ] && [ $# -gt 3 ]; then
+if [ $# -lt 2 ] || [ $# -gt 3 ]; then
    echo Usage: "$0" CODENAME ARCH UPSTREAM \(optional\)
    echo Example 1: "$0" nabia amd64
    echo Example 2: "$0" bullseye amd64
@@ -36,179 +36,174 @@ if [ $# -lt 2 ] && [ $# -gt 3 ]; then
 fi
 
 set -e
-#Clean previous setup.
-[ -f /etc/apt/sources.list.d/debootstrap.list ] && \
-rm /etc/apt/sources.list.d/debootstrap.list
-[ -f /etc/apt/preferences.d/debootstrap ] && \
-rm /etc/apt/preferences.d/debootstrap
 
+#------------------------------------------------
+# Set initial variables.
+#------------------------------------------------
 CODENAME="$1"
 ARCH="$2"
 UPSTREAM="$3"
+HOST_OS="$(lsb_release -si)"
+DBSTRAP_VER="$(dpkg-query -s debootstrap 2>/dev/null|awk '/Version/{print$2}')"
+PORTS=false
+EATMYDATA=eatmydata
+UBUSRC=http://archive.ubuntu.com/ubuntu
+## debootstrap and keyring files setup using git submodules.
+DBSTRAP_SCRIPTS="debootstrap/scripts"
+DEBIAN_KEYRING_FOLDER="debian-archive-keyring"
+KEYRING_FILE="ubuntu-keyring/keyrings/ubuntu-archive-keyring.gpg"
+TRISQUEL_KEYRING_FILE="trisquel-packages/extra/trisquel-keyring/keyrings/trisquel-archive-keyring.gpg"
+EXTRACTOR="dpkg-deb"
+REPO="http://archive.trisquel.org/trisquel"
 
+#------------------------------------------------
+# Check for minimal required dependencies to use script.
+#------------------------------------------------
+[ ! -d "$DEBIAN_KEYRING_FOLDER/apt-trusted-asc" ] &&
+echo "Don't forget to init git submodules of the repo." && exit
+for i in debootstrap sbuild schroot ; do
+    [ -z "$(dpkg-query -l|grep "$i")" ] && \
+    printf "> Minimal dependecies required: debootstrap sbuild schroot\n" && \
+    exit
+done
+
+
+#------------------------------------------------
+# Setup variables logic from input.
+#------------------------------------------------
 [ "$ARCH" = "i386"  ] || [ "$ARCH" = "armhf" ] && BITS=32
 [ "$ARCH" = "amd64" ] || [ "$ARCH" = "arm64" ] || [ "$ARCH" = "ppc64el" ] && BITS=64
-PORTS=false
 [ "$ARCH" = "armhf" ] || [ "$ARCH" = "arm64" ] || [ "$ARCH" = "ppc64el" ] && PORTS=true
-
+[ "$BITS" == "32" ] && EATMYDATA=""
+[ "$ARCH" = "ppc64el" ] && EXTRACTOR="ar"
 [ "$CODENAME" == "buster"   ] && UPSTREAM="debian" && VALID=1
 [ "$CODENAME" == "bullseye" ] && UPSTREAM="debian" && VALID=1
 [ "$CODENAME" == "bookworm" ] && UPSTREAM="debian" && VALID=1
 [ "$CODENAME" == "sid"      ] && UPSTREAM="debian" && VALID=1
-
-EATMYDATA=eatmydata
-[ "$BITS" == "32" ] && EATMYDATA=""
-
-UBUSRC=http://archive.ubuntu.com/ubuntu
+[ "$CODENAME" == "aramo"  ] && UBURELEASE="jammy"  && VALID=1
+[ "$CODENAME" == "nabia"  ] && UBURELEASE="focal"  && VALID=1
+[ "$CODENAME" == "etiona" ] && UBURELEASE="bionic" && VALID=1
 "$PORTS" && UBUSRC=http://ports.ubuntu.com/
 
-if [ "$UPSTREAM" = "upstream" ];then
-REPO=http://archive.ubuntu.com/ubuntu
-TRISQUELREPO=http://archive.trisquel.org/trisquel
-"$PORTS" && REPO="$UBUSRC"
-elif [ "$UPSTREAM" = "debian" ]; then
-REPO=http://deb.debian.org/debian
-else
-REPO=http://archive.trisquel.org/trisquel
-fi
-
-[ "$CODENAME" == "aramo"  ] && UBURELEASE=jammy  && VALID=1
-[ "$CODENAME" == "nabia"  ] && UBURELEASE=focal  && VALID=1
-[ "$CODENAME" == "etiona" ] && UBURELEASE=bionic && VALID=1
-
-if [ "$VALID" != 1 ];then
+if [ "$VALID" != 1 ]; then
     echo "Not valid codename"
     exit 1
 fi
 
-HOST_OS="$(lsb_release -si)"
-DBSTRAP_VER="$(dpkg-query -s debootstrap 2>/dev/null|awk '/Version/{print$2}')"
+#------------------------------------------------
+# Set debootstrap repo according to the script input.
+#------------------------------------------------
+[ "$UPSTREAM" = "upstream" ] && \
+REPO="http://archive.ubuntu.com/ubuntu" && \
+TRISQUELREPO="http://archive.trisquel.org/trisquel" && \
+"$PORTS" && REPO="$UBUSRC"
+#
+[ "$UPSTREAM" = "debian" ] && \
+REPO="http://deb.debian.org/debian"
+
 echo -e "\\nOS: $HOST_OS \\ndebootstrap: $DBSTRAP_VER\\n"
 
-#Upgrade debian debootstrap package if required.
-if [ "$HOST_OS" = Debian ] && \
-   version_gt 1.0.124 "$DBSTRAP_VER" && \
-   [ "$CODENAME" = aramo ];then
+#------------------------------------------------
+# Upgrade (if required) and setup debootstrap package.
+#------------------------------------------------
+## - Debian host | aramo schroot
+if [ "$HOST_OS" = "Debian" ] && version_gt 1.0.124 "$DBSTRAP_VER" && \
+   [ "$CODENAME" = "aramo" ]; then
     echo "It is required to upgrade debootstrap to create a $CODENAME jail, upgrading..."
-cat << DBST_REPO >> /etc/apt/sources.list.d/debootstrap.list
-#Pinned repo (see /etc/apt/preferences.d/debootstrap).
-deb http://deb.debian.org/debian bullseye-backports main
-DBST_REPO
-    apt update -q2
-cat << DBST > /etc/apt/preferences.d/debootstrap
-Package: *
-Pin: release n=bullseye-backports
-Pin-Priority: 1
-DBST
-    apt-get -t bullseye-backports install debootstrap
-fi
+    {
+    echo "#Pinned repo (see /etc/apt/preferences.d/debootstrap)."
+    echo "deb http://deb.debian.org/debian bookworm main"
+    } > /etc/apt/sources.list.d/debootstrap.list
+    {
+    echo "Package: *"
+    echo "Pin: release n=bookworm"
+    echo "Pin-Priority: 1"
+    } > /etc/apt/preferences.d/debootstrap
 
-if [ "$HOST_OS" != Debian ] && \
-   version_gt 1.0.124 "$DBSTRAP_VER" && \
-   [ "$CODENAME" = aramo ];then
+    apt-get update -q2
+    apt-get -t bookworm -y install debootstrap
+fi
+## - Trisquel / Ubuntu host | aramo schroot
+if [ "$HOST_OS" != "Debian" ] && version_gt 1.0.124 "$DBSTRAP_VER" && \
+   [ "$CODENAME" = "aramo" ]; then
     echo "It is required to upgrade debootstrap to create the $CODENAME jail, upgrading..."
-#Add variables to meet OS.
-[ "$HOST_OS" = "Trisquel" ] && REPO_ARCHIVE="$REPO" && REPO_DIST="$CODENAME"
-[ "$HOST_OS" = "Ubuntu" ] && REPO_ARCHIVE="$UBUSRC" && REPO_DIST="$UBURELEASE"
-"$PORTS" && BIN_URL="ubuntu-ports"
-#Set custom OS backport repository.
-cat << DBST_REPO > /etc/apt/sources.list.d/debootstrap.list
-#Pinned repo (see /etc/apt/preferences.d/debootstrap).
-deb $REPO_ARCHIVE$BIN_URL $REPO_DIST main
-DBST_REPO
-cat << DBST > /etc/apt/preferences.d/debootstrap
-Package: *
-Pin: release n=$REPO_DIST
-Pin-Priority: 1
-DBST
-    apt update -q2
-    apt-get -t "$REPO_DIST" install --reinstall debootstrap
-fi
+    ### Add variables to meet either OS.
+    [ "$HOST_OS" = "Trisquel" ] && REPO_ARCHIVE="$REPO" && REPO_DIST="$CODENAME"
+    [ "$HOST_OS" = "Ubuntu" ] && REPO_ARCHIVE="$UBUSRC" && REPO_DIST="$UBURELEASE"
+    "$PORTS" && BIN_URL="ubuntu-ports"
+    ### Set custom OS backport repository.
+    {
+    echo "#Pinned repo (see /etc/apt/preferences.d/debootstrap)."
+    echo "deb $REPO_ARCHIVE$BIN_URL $REPO_DIST main"
+    } > /etc/apt/sources.list.d/debootstrap.list
+    {
+    echo "Package: *"
+    echo "Pin: release n=$REPO_DIST"
+    echo "Pin-Priority: 1"
+    } > /etc/apt/preferences.d/debootstrap
 
+    apt-get update -q2
+    apt-get -t "$REPO_DIST" -y install --reinstall debootstrap
+fi
+# Delete tmp deboostrap pinned repo.
+rm -f /etc/apt/sources.list.d/debootstrap.list \
+      /etc/apt/preferences.d/debootstrap
+
+#------------------------------------------------
+# Prepare debootstrap and chroot
+#------------------------------------------------
 CA_BASE="$CODENAME-$ARCH"
+TBR_CODENAME="$CODENAME" # not used (overwritten) on debian chroots.
 SBUILD_CREATE_DIR="/tmp/sbuild-create/$CA_BASE"
 
-if [ "$UPSTREAM" = "upstream" ];then
-TRISQUELNAME="$CODENAME"
-CODENAME="$UBURELEASE"
+## Fix variables to use trisquel codename as upstream value on schroot.
+[ "$UPSTREAM" = "upstream" ] && \
+TRISQUELNAME="$CODENAME" && \
+CODENAME="$UBURELEASE" && \
 UNIVERSE="universe"
-fi
 
-umount "$SBUILD_CREATE_DIR"/proc || true
-umount "$SBUILD_CREATE_DIR"/ || true
-rm -rf "$SBUILD_CREATE_DIR"
+## Create chroot on tmpfs
+umount /tmp/sbuild-create/*/proc || true
+umount /tmp/sbuild-create/*"$ARCH"/ || true
+rm -rf /tmp/sbuild-create/*
 mkdir -p "$SBUILD_CREATE_DIR"
 mount -t tmpfs none "$SBUILD_CREATE_DIR"
-DBSTRAP_SCRIPTS="/usr/share/debootstrap/scripts"
 
-if [ "$HOST_OS" = "Trisquel" ];then
-    if [ "$UPSTREAM" = "upstream" ];then
-        TMP_KEY="$(mktemp -d)"
-        LATEST_LTS_KEYRING="http://archive.ubuntu.com/ubuntu/pool/main/u/ubuntu-keyring/ubuntu-keyring_2021.03.26.tar.gz"
-        KEYRING_PATH="ubuntu-keyring-2021.03.26/keyrings"
-        KEYRING_FILE="ubuntu-archive-keyring.gpg"
-        curl -s -4  "$LATEST_LTS_KEYRING" | tar xvfz  - "$KEYRING_PATH"/"$KEYRING_FILE"
-        mv "$KEYRING_PATH"/"$KEYRING_FILE" "$TMP_KEY"/"$KEYRING_FILE"
-        rm -r "$(dirname $KEYRING_PATH)"
-        PRE_BUILD_KEYRING="--keyring=$TMP_KEY/$KEYRING_FILE"
-        if [ ! -f "$DBSTRAP_SCRIPTS"/"$CODENAME" ];then
-            if [ -f  "$DBSTRAP_SCRIPTS"/trisquel ]; then
-                ln -s "$DBSTRAP_SCRIPTS"/trisquel "$DBSTRAP_SCRIPTS"/"$CODENAME"
-            elif [ -f "$DBSTRAP_SCRIPTS"/gutsy ]; then
-                ln -s "$DBSTRAP_SCRIPTS"/gutsy "$DBSTRAP_SCRIPTS"/"$CODENAME"
-            else
-               echo "No option available"
-               exit
-            fi
-        fi
-    fi
-fi
-if [ "$HOST_OS" != "Trisquel" ];then
-    if [ -z "$UPSTREAM" ];then
-        TMP_TKEY="$(mktemp -d)"
-        TRISQUEL_ARCHIVE_KEYRING="http://archive.trisquel.org/trisquel/trisquel-archive-signkey.gpg"
-        curl -s -4 "$TRISQUEL_ARCHIVE_KEYRING" > "$TMP_TKEY"/trisquel-archive-signkey
-        gpg --dearmor "$TMP_TKEY"/trisquel-archive-signkey
-        PRE_BUILD_KEYRING="--keyring=$TMP_TKEY/trisquel-archive-signkey.gpg"
-        DBSTAP_TRISQUEL="https://gitlab.trisquel.org/trisquel/package-helpers/-/raw/nabia/helpers/DATA/debootstrap/trisquel"
-        DBSTRAP_TRIS_COM="https://gitlab.trisquel.org/trisquel/package-helpers/-/raw/nabia/helpers/DATA/debootstrap/trisquel-common"
-        [ ! -f "$DBSTRAP_SCRIPTS"/"$CODENAME"     ] && curl -s -4 "$DBSTAP_TRISQUEL" > "$DBSTRAP_SCRIPTS"/"$CODENAME"
-        [ ! -f "$DBSTRAP_SCRIPTS"/trisquel-common ] && curl -s -4 "$DBSTRAP_TRIS_COM" > "$DBSTRAP_SCRIPTS"/trisquel-common
-    elif [ "$UPSTREAM" = upstream ];then
-        apt install -y ubuntu-keyring
-        PRE_BUILD_KEYRING="--keyring=/usr/share/keyrings/ubuntu-archive-keyring.gpg"
-        [ ! -f "$DBSTRAP_SCRIPTS"/"$CODENAME" ] && ln -s "$DBSTRAP_SCRIPTS"/gutsy "$DBSTRAP_SCRIPTS"/"$CODENAME"
-    fi
-fi
-if [ "$UPSTREAM" = "debian" ];then
-    apt install -y debian-archive-keyring
-    PRE_BUILD_KEYRING="--keyring=/usr/share/keyrings/debian-archive-keyring.gpg"
-    DBSTAP_SID="https://salsa.debian.org/installer-team/debootstrap/-/raw/master/scripts/sid"
-    DBSTRAP_DEB_COM="https://salsa.debian.org/installer-team/debootstrap/-/raw/master/scripts/debian-common"
-    [ ! -f "$DBSTRAP_SCRIPTS"/"$CODENAME"   ] && curl -s -4 "$DBSTAP_SID" > "$DBSTRAP_SCRIPTS"/"$CODENAME"
-    [ ! -f "$DBSTRAP_SCRIPTS"/debian-common ] && curl -s -4 "$DBSTRAP_DEB_COM" > "$DBSTRAP_SCRIPTS"/debian-common
-fi
-
-EXTRACTOR="dpkg-deb"
-[ "$ARCH" = "ppc64el" ] && EXTRACTOR=ar
+## Standalone setup keyring and debootstrap script file for supported OSes.
+[ "$HOST_OS" = "Trisquel" ] && [ "$UPSTREAM" = "upstream" ] && \
+PRE_BUILD_KEYRING="--keyring=$KEYRING_FILE"
+[ "$HOST_OS" != "Trisquel" ] && [ -z "$UPSTREAM" ] && \
+PRE_BUILD_KEYRING="--keyring=$TRISQUEL_KEYRING_FILE"
+[ "$UPSTREAM" = upstream ] && \
+PRE_BUILD_KEYRING="--keyring=$KEYRING_FILE"
+[ "$UPSTREAM" = "debian" ] && \
+cat "$DEBIAN_KEYRING_FOLDER"/apt-trusted-asc/*automatic.asc > \
+    "$DEBIAN_KEYRING_FOLDER"/debian-apt-keyring.asc && \
+cat "$DEBIAN_KEYRING_FOLDER"/debian-apt-keyring.asc | gpg --dearmour | \
+    tee "$DEBIAN_KEYRING_FOLDER"/debian-apt-keyring.gpg > /dev/null
+PRE_BUILD_KEYRING="--keyring=$DEBIAN_KEYRING_FOLDER/debian-apt-keyring.gpg"
 
 [ -z "$PRE_BUILD_KEYRING" ] && PRE_BUILD_KEYRING="--verbose"
 debootstrap --arch="$ARCH" \
-	    --extractor=$EXTRACTOR \
+            --extractor=$EXTRACTOR \
             --variant=minbase \
             --components=main \
             "$PRE_BUILD_KEYRING" \
             --include=apt \
             "$CODENAME" \
-            "$SBUILD_CREATE_DIR" "$REPO"
+            "$SBUILD_CREATE_DIR" \
+            "$REPO" \
+            "$DBSTRAP_SCRIPTS/$CODENAME"
 
+#------------------------------------------------
+# Prepare chroot environment install script.
+#------------------------------------------------
 wget http://builds.trisquel.org/repos/signkey.asc  -O "$SBUILD_CREATE_DIR"/tmp/key.asc
 
 cat << MAINEOF > "$SBUILD_CREATE_DIR"/finish.sh
 #!/bin/bash
 set -x
 set -e
-TMP_GPG_REPO="$(mktemp)"
 if [ -n "" ]; then
    mkdir -p /etc/apt/apt.conf.d/
    cat > /etc/apt/apt.conf.d/99mk-sbuild-proxy <<EOF
@@ -220,9 +215,9 @@ fi
 #Add gpg key via gpg server to keyring storage.
 add_gpg_keyring() {
 apt-key adv --recv-keys --keyserver keyserver.ubuntu.com \$1
-apt-key export \$1 | gpg --dearmour | tee $TMP_GPG_REPO/\$1.gpg >/dev/null
+apt-key export \$1 | gpg --dearmour | tee /tmp/\$1.gpg >/dev/null
 apt-key del \$1
-mv $TMP_GPG_REPO/\$1.gpg /etc/apt/trusted.gpg.d/
+mv /tmp/\$1.gpg /etc/apt/trusted.gpg.d/
 }
 add_sbuild_keys() {
 # Reload package lists
@@ -301,108 +296,109 @@ rm /finish.sh
 echo Finished self-setup
 MAINEOF
 
-cat << EOF > "$SBUILD_CREATE_DIR"/etc/apt/sources.list
-deb $REPO $CODENAME main $UNIVERSE
-deb $REPO $CODENAME-updates main $UNIVERSE
-deb $REPO $CODENAME-security main $UNIVERSE
+#------------------------------------------------
+# Setup chroot OS repositories.
+#------------------------------------------------
+## Trisquel / *buntu chroot sources file.
+{
+echo "deb $REPO $CODENAME main $UNIVERSE"
+echo "deb $REPO $CODENAME-updates main $UNIVERSE"
+echo "deb $REPO $CODENAME-security main $UNIVERSE"
+echo ""
+echo "deb-src $REPO $CODENAME main $UNIVERSE"
+echo "deb-src $REPO $CODENAME-updates main $UNIVERSE"
+echo "deb-src $REPO $CODENAME-security main $UNIVERSE"
+echo ""
+echo "#Trisquel builds repositories"
+echo "#deb http://builds.trisquel.org/repos/$TBR_CODENAME/ $TBR_CODENAME main"
+echo "#deb http://builds.trisquel.org/repos/$TBR_CODENAME/ $TBR_CODENAME-security main"
+} > "$SBUILD_CREATE_DIR"/etc/apt/sources.list
 
-deb-src $REPO $CODENAME main $UNIVERSE
-deb-src $REPO $CODENAME-updates main $UNIVERSE
-deb-src $REPO $CODENAME-security main $UNIVERSE
-
-#Trisquel builds repositories
-#deb http://builds.trisquel.org/repos/$(cut -d '-' -f1 <<< "$CA_BASE")/ $(cut -d '-' -f1 <<< "$CA_BASE") main
-#deb http://builds.trisquel.org/repos/$(cut -d '-' -f1 <<< "$CA_BASE")/ $(cut -d '-' -f1 <<< "$CA_BASE")-security main
-EOF
+## Add additional source repositories (used at BUILDONLYARCH).
 if [ "$UPSTREAM" != "upstream" ];then
-cat << EOF >> "$SBUILD_CREATE_DIR"/etc/apt/sources.list
-
-#Ubuntu sources (only source packages)
-deb-src $UBUSRC $UBURELEASE main universe
-deb-src $UBUSRC $UBURELEASE-updates main universe
-deb-src $UBUSRC $UBURELEASE-security main universe
-
-EOF
+    {
+    echo ""
+    echo "#Ubuntu sources (only source packages)"
+    echo "deb-src $UBUSRC $UBURELEASE main universe"
+    echo "deb-src $UBUSRC $UBURELEASE-updates main universe"
+    echo "deb-src $UBUSRC $UBURELEASE-security main universe"
+    } >> "$SBUILD_CREATE_DIR"/etc/apt/sources.list
 else
-cat << EOF >> "$SBUILD_CREATE_DIR"/etc/apt/sources.list
-
-#Trisquel sources (only source packages)
-#SRdeb-src $TRISQUELREPO $TRISQUELNAME main
-#SRdeb-src $TRISQUELREPO $TRISQUELNAME-updates main
-#SRdeb-src $TRISQUELREPO $TRISQUELNAME-security main
-
-EOF
-
+    {
+    echo ""
+    echo "#Trisquel sources (only source packages)"
+    echo "#SRdeb-src $TRISQUELREPO $TRISQUELNAME main"
+    echo "#SRdeb-src $TRISQUELREPO $TRISQUELNAME-updates main"
+    echo "#SRdeb-src $TRISQUELREPO $TRISQUELNAME-security main"
+    } >> "$SBUILD_CREATE_DIR"/etc/apt/sources.list
 fi
+## Setup Debian distribution chroot sources file.
 if [ "$UPSTREAM" = "debian" ];then
     if [ "$CODENAME" = "sid"      ]; then
-cat << EOF > "$SBUILD_CREATE_DIR"/etc/apt/sources.list
-deb $REPO $CODENAME main
-deb-src $REPO $CODENAME main
-
-EOF
+        {
+        echo "deb $REPO $CODENAME main"
+        echo "deb-src $REPO $CODENAME main"
+        echo ""
+        } > "$SBUILD_CREATE_DIR"/etc/apt/sources.list
     fi
     if [ "$CODENAME" = "bullseye" ] || \
        [ "$CODENAME" = "bookworm" ]; then
-cat << EOF > "$SBUILD_CREATE_DIR"/etc/apt/sources.list
-deb $REPO $CODENAME main
-deb $REPO $CODENAME-updates main
-deb $REPO-security $CODENAME-security main
-
-deb-src $REPO $CODENAME main
-deb-src $REPO $CODENAME-updates main
-deb-src $REPO-security $CODENAME-security main
-
-EOF
+        {
+        echo "deb $REPO $CODENAME main"
+        echo "deb $REPO $CODENAME-updates main"
+        echo "deb $REPO-security $CODENAME-security main"
+        echo ""
+        echo "deb-src $REPO $CODENAME main"
+        echo "deb-src $REPO $CODENAME-updates main"
+        echo "deb-src $REPO-security $CODENAME-security main"
+        } > "$SBUILD_CREATE_DIR"/etc/apt/sources.list
     fi
     if [ "$CODENAME" = "buster" ]; then
-cat << EOF > "$SBUILD_CREATE_DIR"/etc/apt/sources.list
-deb $REPO $CODENAME main
-deb $REPO $CODENAME-updates main
-deb http://security.debian.org/debian-security $CODENAME/updates main
-
-deb-src $REPO $CODENAME main
-deb-src $REPO $CODENAME-updates main
-deb-src http://security.debian.org/debian-security $CODENAME/updates main
-
-EOF
+        {
+        echo "deb $REPO $CODENAME main"
+        echo "deb $REPO $CODENAME-updates main"
+        echo "deb http://security.debian.org/debian-security $CODENAME/updates main"
+        echo ""
+        echo "deb-src $REPO $CODENAME main"
+        echo "deb-src $REPO $CODENAME-updates main"
+        echo "deb-src http://security.debian.org/debian-security $CODENAME/updates main"
+        echo ""
+        } > "$SBUILD_CREATE_DIR"/etc/apt/sources.list
     fi
 fi
+
+#------------------------------------------------
+# Excecute chroot finish.sh and tweak sources file.
+#------------------------------------------------
 mount -o bind /proc "$SBUILD_CREATE_DIR"/proc
 chroot "$SBUILD_CREATE_DIR" bash -x /finish.sh
-# Delayed enabled repos as ubuntu doesn't have gpg on main to add keys earlier.
+## Delayed enabled repos as ubuntu doesn't have gpg on main to add keys earlier.
 chroot "$SBUILD_CREATE_DIR" sed -i '/builds.trisquel.org/s|^#||g' /etc/apt/sources.list
 chroot "$SBUILD_CREATE_DIR" sed -i 's|^#SR||g' /etc/apt/sources.list
 umount "$SBUILD_CREATE_DIR"/proc
 
+## Move finished tmpfs chroot to /var/lib/schroot/chroots
 rm -rf /var/lib/schroot/chroots/"$CA_BASE"
 [ -d /var/lib/schroot/chroots ] || mkdir /var/lib/schroot/chroots
 cp -a "$SBUILD_CREATE_DIR" /var/lib/schroot/chroots/"$CA_BASE"
 umount "$SBUILD_CREATE_DIR"
-rm -r "$SBUILD_CREATE_DIR"
+rm -rf /tmp/sbuild-create/
 
-cat << EOF > /etc/schroot/chroot.d/sbuild-"$CA_BASE"
-[$CA_BASE]
-description=$CODENAME-$ARCH $UPSTREAM build.
-groups=sbuild,root
-root-groups=sbuild,root
-source-root-groups=root,sbuild
-type=directory
-profile=sbuild
-union-type=overlay
-directory=/var/lib/schroot/chroots/$CA_BASE
-command-prefix=linux$BITS,$EATMYDATA
-EOF
+{
+echo "[$CA_BASE]"
+echo "description=$CODENAME-$ARCH $UPSTREAM build."
+echo "groups=sbuild,root"
+echo "root-groups=sbuild,root"
+echo "source-root-groups=root,sbuild"
+echo "type=directory"
+echo "profile=sbuild"
+echo "union-type=overlay"
+echo "directory=/var/lib/schroot/chroots/$CA_BASE"
+echo "command-prefix=linux$BITS,$EATMYDATA"
+}  > /etc/schroot/chroot.d/sbuild-"$CA_BASE"
 
 rm -f /etc/schroot/setup.d/04tmpfs
-
-if [ "$UPSTREAM" = "upstream" ] || [ "$UPSTREAM" = "debian" ];then
-    [ -f /usr/share/debootstrap/scripts/$CODENAME ] && rm /usr/share/debootstrap/scripts/$CODENAME
-    [ -f /usr/share/debootstrap/scripts/debian-common ] && rm /usr/share/debootstrap/scripts/debian-common
-fi
 
 sbuild-update -udcar "$CA_BASE"
 
 echo "Setup of schroot $CA_BASE finished successfully"
-
-
