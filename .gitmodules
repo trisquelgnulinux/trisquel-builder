@@ -1,0 +1,12 @@
+[submodule "ubuntu-keyring"]
+	path = ubuntu-keyring
+	url = https://git.launchpad.net/ubuntu/+source/ubuntu-keyring
+[submodule "trisquel-packages"]
+	path = trisquel-packages
+	url = https://gitlab.trisquel.org/trisquel/trisquel-packages.git
+[submodule "debootstrap"]
+	path = debootstrap
+	url = https://salsa.debian.org/installer-team/debootstrap
+[submodule "debian-archive-keyring"]
+	path = debian-archive-keyring
+	url = https://salsa.debian.org/release-team/debian-archive-keyring
