@@ -29,9 +29,9 @@ fi
 
 if [ $# -lt 2 ] || [ $# -gt 3 ]; then
    echo Usage: "$0" CODENAME ARCH UPSTREAM \(optional\)
-   echo Example 1: "$0" nabia amd64
+   echo Example 1: "$0" aramo amd64
    echo Example 2: "$0" bullseye amd64
-   echo Example 3: "$0" aramo amd64 upstream
+   echo Example 3: "$0" ecne amd64 upstream
    exit 1
 fi
 
@@ -79,7 +79,9 @@ done
 [ "$CODENAME" == "buster"   ] && UPSTREAM="debian" && VALID=1
 [ "$CODENAME" == "bullseye" ] && UPSTREAM="debian" && VALID=1
 [ "$CODENAME" == "bookworm" ] && UPSTREAM="debian" && VALID=1
+[ "$CODENAME" == "trixie"   ] && UPSTREAM="debian" && VALID=1
 [ "$CODENAME" == "sid"      ] && UPSTREAM="debian" && VALID=1
+[ "$CODENAME" == "ecne"   ] && UBURELEASE="noble" &&  VALID=1 && DEVELOPMENT=1
 [ "$CODENAME" == "aramo"  ] && UBURELEASE="jammy"  && VALID=1
 [ "$CODENAME" == "nabia"  ] && UBURELEASE="focal"  && VALID=1
 [ "$CODENAME" == "etiona" ] && UBURELEASE="bionic" && VALID=1
@@ -180,7 +182,7 @@ PRE_BUILD_KEYRING="--keyring=$KEYRING_FILE"
 cat "$DEBIAN_KEYRING_FOLDER"/apt-trusted-asc/*automatic.asc > \
     "$DEBIAN_KEYRING_FOLDER"/debian-apt-keyring.asc && \
 cat "$DEBIAN_KEYRING_FOLDER"/debian-apt-keyring.asc | gpg --dearmour | \
-    tee "$DEBIAN_KEYRING_FOLDER"/debian-apt-keyring.gpg > /dev/null
+    tee "$DEBIAN_KEYRING_FOLDER"/debian-apt-keyring.gpg > /dev/null && \
 PRE_BUILD_KEYRING="--keyring=$DEBIAN_KEYRING_FOLDER/debian-apt-keyring.gpg"
 
 [ -z "$PRE_BUILD_KEYRING" ] && PRE_BUILD_KEYRING="--verbose"
@@ -342,6 +344,7 @@ if [ "$UPSTREAM" = "debian" ];then
         } > "$SBUILD_CREATE_DIR"/etc/apt/sources.list
     fi
     if [ "$CODENAME" = "bullseye" ] || \
+       [ "$CODENAME" = "trixie" ] || \
        [ "$CODENAME" = "bookworm" ]; then
         {
         echo "deb $REPO $CODENAME main"
@@ -373,7 +376,9 @@ fi
 mount -o bind /proc "$SBUILD_CREATE_DIR"/proc
 chroot "$SBUILD_CREATE_DIR" bash -x /finish.sh
 ## Delayed enabled repos as ubuntu doesn't have gpg on main to add keys earlier.
+[ -z $DEVELOPMENT ] && \
 chroot "$SBUILD_CREATE_DIR" sed -i '/builds.trisquel.org/s|^#||g' /etc/apt/sources.list
+[ -z $DEVELOPMENT ] && \
 chroot "$SBUILD_CREATE_DIR" sed -i 's|^#SR||g' /etc/apt/sources.list
 umount "$SBUILD_CREATE_DIR"/proc
 
