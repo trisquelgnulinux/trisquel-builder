@@ -266,10 +266,16 @@ apt-get -y  --allow-downgrades \
             --allow-remove-essential \
             --allow-change-held-packages \
             install --no-install-recommends fakeroot apt-utils apt zip unzip quilt wget lsb-release gnupg $EATMYDATA
+# Install packages that might fail separately otherwise all the line will
+# not get installed (aptitude).
 apt-get -y  --allow-downgrades \
             --allow-remove-essential \
             --allow-change-held-packages \
-            install --no-install-recommends aptitude pkgbinarymangler || true
+            install --no-install-recommends pkgbinarymangler
+apt-get -y  --allow-downgrades \
+            --allow-remove-essential \
+            --allow-change-held-packages \
+            install --no-install-recommends aptitude || true
 
 #Add keys to upstream schroot (first get universe requirements).
 if [ "$UPSTREAM" = "upstream" ] || [ "$UPSTREAM" = "debian" ]; then
