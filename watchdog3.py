@@ -26,7 +26,8 @@ import apt
 TRISQUELRELEASES = {
     'etiona': {'version': '9.0', 'codename': 'etiona', 'upstream': 'bionic'},
     'nabia': {'version': '10.0', 'codename': 'nabia', 'upstream': 'focal'},
-    'aramo': {'version': '11.0', 'codename': 'aramo', 'upstream': 'jammy'}
+    'aramo': {'version': '11.0', 'codename': 'aramo', 'upstream': 'jammy'},
+    'ecne': {'version': '12.0', 'codename': 'ecne', 'upstream': 'noble'}
     }
 
 TRISQUEL_REPO_KEY = "B138CA450C05112F"
@@ -102,10 +103,14 @@ def get_helper_info(release, package):
     for line in helper.splitlines():
         if line.startswith("VERSION="):
             version = line.replace("VERSION=", "").replace("\n", "")
-            if package == 'console-setup':
-                version = "-%strisquel%s" % (TRISQUELRELEASES[release]['version'], version)
+            rel_fversion = float(TRISQUELRELEASES[release]['version'])
+            if rel_fversion < 12.0:
+                if package == 'console-setup':
+                    version = "-%strisquel%s" % (TRISQUELRELEASES[release]['version'], version)
+                else:
+                    version = "+%strisquel%s" % (TRISQUELRELEASES[release]['version'], version)
             else:
-                version = "+%strisquel%s" % (TRISQUELRELEASES[release]['version'], version)
+                version = "trisquel%s" % (version)
         if line.startswith("EXTERNAL="):
             external = line.replace("EXTERNAL=", "")\
                 .replace("\n", "").replace('\'', '').replace('\"', '')
