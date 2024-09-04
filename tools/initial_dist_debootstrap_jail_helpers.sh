@@ -106,7 +106,20 @@ for a in $(\
 do
     [ -f $PH_HELPERS_DIR/helpers/make-"$a" ] && \
     wc -c $PH_HELPERS_DIR/helpers/make-"$a" | sed "s|$PH_HELPERS_DIR/helpers/||"
-done | sort -r
+    for i in $( \
+                grep "install" ../sbuild-create.sh | \
+                grep -v '#' | \
+                grep -v ' true' | \
+                grep -v "REPO_DIST"| \
+                sed 's|$.*||' | \
+                sed 's| --no-install-recommends||' | \
+                awk -F 'install' '{print$2}' | \
+                xargs )
+    do
+        [ -f $PH_HELPERS_DIR/helpers/make-"$i" ] && \
+        wc -c $PH_HELPERS_DIR/helpers/make-"$i" | sed "s|$PH_HELPERS_DIR/helpers/||"
+    done
+done | awk '!a[$0]++' | sort -rn
 echo "------"
 echo "Done"
 
