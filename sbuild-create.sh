@@ -81,7 +81,7 @@ done
 [ "$CODENAME" == "bookworm" ] && UPSTREAM="debian" && VALID=1
 [ "$CODENAME" == "trixie"   ] && UPSTREAM="debian" && VALID=1
 [ "$CODENAME" == "sid"      ] && UPSTREAM="debian" && VALID=1
-[ "$CODENAME" == "ecne"   ] && UBURELEASE="noble" &&  VALID=1 && DEVELOPMENT=1
+[ "$CODENAME" == "ecne"   ] && UBURELEASE="noble" &&  VALID=1
 [ "$CODENAME" == "aramo"  ] && UBURELEASE="jammy"  && VALID=1
 [ "$CODENAME" == "nabia"  ] && UBURELEASE="focal"  && VALID=1
 [ "$CODENAME" == "etiona" ] && UBURELEASE="bionic" && VALID=1
