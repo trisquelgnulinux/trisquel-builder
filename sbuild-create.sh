@@ -50,6 +50,7 @@ EATMYDATA=eatmydata
 UBUSRC=http://archive.ubuntu.com/ubuntu
 ## debootstrap and keyring files setup using git submodules.
 DBSTRAP_SCRIPTS="debootstrap/scripts"
+SYSTEM_DBSTRAP_SCRIPTS="/usr/share/debootstrap/scripts/"
 DEBIAN_KEYRING_FOLDER="debian-archive-keyring"
 KEYRING_FILE="ubuntu-keyring/keyrings/ubuntu-archive-keyring.gpg"
 TRISQUEL_KEYRING_FILE="trisquel-packages/extra/trisquel-keyring/keyrings/trisquel-archive-keyring.gpg"
@@ -163,6 +164,17 @@ SBUILD_CREATE_DIR="/tmp/sbuild-create/$CA_BASE"
 TRISQUELNAME="$CODENAME" && \
 CODENAME="$UBURELEASE" && \
 UNIVERSE="universe"
+
+[ -z "$UPSTREAM" ] && \
+if [ ! -f "$DBSTRAP_SCRIPTS/$CODENAME" ] && \
+[ -f "$SYSTEM_DBSTRAP_SCRIPTS/$CODENAME" ] ;then
+  DBSTRAP_SCRIPTS="$SYSTEM_DBSTRAP_SCRIPTS"
+else
+  echo "No available \"$CODENAME\" debootstrap script at:"
+  echo "  - $DBSTRAP_SCRIPTS"
+  echo "  - $SYSTEM_DBSTRAP_SCRIPTS"
+  exit
+fi
 
 ## Create chroot on tmpfs
 umount /tmp/sbuild-create/*/proc || true
@@ -382,9 +394,9 @@ fi
 mount -o bind /proc "$SBUILD_CREATE_DIR"/proc
 chroot "$SBUILD_CREATE_DIR" bash -x /finish.sh
 ## Delayed enabled repos as ubuntu doesn't have gpg on main to add keys earlier.
-[ -z $DEVELOPMENT ] && \
+[ -z "$DEVELOPMENT" ] && \
 chroot "$SBUILD_CREATE_DIR" sed -i '/builds.trisquel.org/s|^#||g' /etc/apt/sources.list
-[ -z $DEVELOPMENT ] && \
+[ -z "$DEVELOPMENT" ] && \
 chroot "$SBUILD_CREATE_DIR" sed -i 's|^#SR||g' /etc/apt/sources.list
 umount "$SBUILD_CREATE_DIR"/proc
 
