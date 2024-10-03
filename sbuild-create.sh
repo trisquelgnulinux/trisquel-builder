@@ -166,8 +166,9 @@ CODENAME="$UBURELEASE" && \
 UNIVERSE="universe"
 
 [ -z "$UPSTREAM" ] && \
-if [ ! -f "$DBSTRAP_SCRIPTS/$CODENAME" ] && \
-[ -f "$SYSTEM_DBSTRAP_SCRIPTS/$CODENAME" ] ;then
+if [ -f "$DBSTRAP_SCRIPTS/$CODENAME" ]; then
+  DBSTRAP_SCRIPTS="$DBSTRAP_SCRIPTS"
+elif [ -f "$SYSTEM_DBSTRAP_SCRIPTS/$CODENAME" ] ;then
   DBSTRAP_SCRIPTS="$SYSTEM_DBSTRAP_SCRIPTS"
 else
   echo "No available \"$CODENAME\" debootstrap script at:"
