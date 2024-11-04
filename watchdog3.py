@@ -196,7 +196,11 @@ def build_cache(name, uri, suites, components, release, keyid, binaries=False):
         cache.open()
     except apt.cache.FetchFailedException:
         debug("E: apt.Cache for %s failed to build" % name)
-        return None
+        print(
+            "E: Failed to update apt cache for %s.\n"
+            "Exiting to avoid unnecessary builds." % (name)
+        )
+        sys.exit(1)
     try:
         src = apt_pkg.SourceRecords()
     except apt_pkg.Error:
