@@ -22,6 +22,7 @@ import sys
 import subprocess
 import apt_pkg
 import apt
+import urllib.error
 
 TRISQUELRELEASES = {
     'etiona': {'version': '9.0', 'codename': 'etiona', 'upstream': 'bionic'},
@@ -194,13 +195,13 @@ def build_cache(name, uri, suites, components, release, keyid, binaries=False):
     try:
         cache.update(raise_on_error=True)
         cache.open()
-    except apt.cache.FetchFailedException:
+    except (apt.cache.FetchFailedException, urllib.error.URLError) as e:
         debug("E: apt.Cache for %s failed to build" % name)
         print(
-            "E: Failed to update apt cache for %s.\n"
-            "Exiting to avoid unnecessary builds." % (name)
+            "E: Failed to update apt cache for %s due to unreachable repo."
+            % name
         )
-        sys.exit(1)
+        return None
     try:
         src = apt_pkg.SourceRecords()
     except apt_pkg.Error:
@@ -307,6 +308,9 @@ def compare_versions(helper_info, tresult, uresult, package, release, cache):
 
 
 def check_versions(tcache, ucache, helper_info, package, release):
+    if tcache is None or ucache is None:
+        print("W: Skipping package '%s' due to missing cache." % package)
+        return
     """
     Checks what type of comparisons to make based on external sources and backports
     """
@@ -360,6 +364,10 @@ def check_distro(release):
                                               "http://archive.trisquel.org/trisquel",
                                               ["%s-backports" % release], "main",
                                               release, TRISQUEL_REPO_KEY)
+
+    if cache["trisquel"] is None or cache["ubuntu"] is None:
+        print("E: Critical caches failed to update for %s. Skipping this release." % release)
+        return
 
     for package in list_helper_packages(release):
         debug("")
