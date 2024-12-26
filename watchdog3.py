@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 #    Copyright (C) 2015-2021  Ruben Rodriguez <ruben@trisquel.info>
+#    Copyright (C) 2024       Luis Guzmán <ark@switnet.org>
 #
 #    This program is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -280,10 +281,13 @@ def compare_versions(helper_info, tresult, uresult, package, release, cache):
                            "binary package exists but has no trisquel version") % package)
                     return
                 debug("Upstream version of %s: %s" % (basepackage, result))
-                abi = uresult.split(".")
-                abi = '.'.join(abi[0:4])
-                if abi not in result.replace("-", '.'):
-                    print("W: Skipping building %s, binary package is out of date" % package)
+                abi_upstream = '.'.join(uresult.split(".")[:3])
+                abi_base = '.'.join(result.split(".")[:3])
+                if abi_upstream != abi_base:
+                    print(
+                        "W: Skipping building %s, binary package is out of date (%s vs %s)"
+                        % (package, abi_upstream, abi_base)
+                    )
                     return
             else:
                 print("W: Skipping building %s, binary package is missing" % package)
