@@ -4,7 +4,7 @@
 
   - Install sbuild:
 
-        sudo apt-get install sbuild schroot debootstrap eatmydata zstd
+        sudo apt-get install git sbuild schroot debootstrap eatmydata zstd
 
   - Configure schroot fstab for ccache
 
@@ -26,11 +26,15 @@
 
   - Add your user to the sbuild group
 
-        sudo addgroup $USER sbuild && newgrp sbuild
+        sudo usermod -aG sbuild $USER && newgrp sbuild
 
 ## Creating the environment
 
-The first time you will need to create the build jails. This is a one time job that must be done for each version/arch you want to use
+The first time you will need to create the build jails. Let's start by pulling the required submodules in:
+
+    git submodule update --init --recursive
+
+Once that is done, the task is a one time job that must be done for each version/arch you want to use
 
     sudo ./sbuild-create.sh $CODENAME $ARCH
 
@@ -45,3 +49,5 @@ You can upgrade the jail with this command:
 The binary packages can be built from a dsc by running:
 
     sbuild --no-run-lintian -v -A --dist $CODENAME --arch $ARCH file.dsc
+
+check `man sbuild` for more useful arguments while testing your builds.
