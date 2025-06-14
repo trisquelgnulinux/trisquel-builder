@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 #    Copyright (C) 2015-2021  Ruben Rodriguez <ruben@trisquel.info>
-#    Copyright (C) 2024       Luis Guzmán <ark@switnet.org>
+#    Copyright (C) 2025       Luis Guzmán <ark@switnet.org>
 #
 #    This program is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -24,6 +24,21 @@ import subprocess
 import apt_pkg
 import apt
 import urllib.error
+
+# Workaround for T12: redirect python-apt warnings flood to a log file
+# due to changes at 2.7.3 'Actually register apt_pkg.Warning object' so
+# they are available in case of debugging.
+import warnings
+
+warnings_log_path = os.path.join(os.getcwd(), "apt-warnings.log")
+with open(warnings_log_path, "w", encoding="utf-8"):
+    pass
+def log_warning_to_file(message, category, filename, lineno, file=None, line=None):
+    with open(warnings_log_path, "a", encoding="utf-8") as f:
+        f.write(warnings.formatwarning(message, category, filename, lineno, line))
+
+warnings.showwarning = log_warning_to_file
+# End of workaround for warning redirection block.
 
 TRISQUELRELEASES = {
     'etiona': {'version': '9.0', 'codename': 'etiona', 'upstream': 'bionic'},
@@ -192,21 +207,25 @@ def build_cache(name, uri, suites, components, release, keyid, binaries=False):
     apt_pkg.config.set("Dir::State::status", "/dev/null")
     make_sourceslist(name, uri, suites, components, release, binaries)
     apt_pkg.init()
-    cache = apt.Cache()
     try:
-        cache.update(raise_on_error=True)
-        cache.open()
-    except (apt.cache.FetchFailedException, urllib.error.URLError) as e:
-        debug("E: apt.Cache for %s failed to build" % name)
-        print(
-            "E: Failed to update apt cache for %s due to unreachable repo."
-            % name
-        )
+        cache = apt.Cache()
+        try:
+            cache.update(raise_on_error=True)
+        except Exception as e:
+            debug("W: cache.update failed for %s: %s" % (name, str(e)))
+        try:
+            cache.open()
+        except Exception as e:
+            debug("W: cache.open failed for %s: %s" % (name, str(e)))
+            print("E: Failed to open apt cache for %s." % name)
+            return None
+    except Exception as e:
+        print("E: Failed to initialize APT cache for %s: %s" % (name, e))
         return None
     try:
         src = apt_pkg.SourceRecords()
-    except apt_pkg.Error:
-        debug("E: could not get apt_pkg.SourceRecords for %s" % name)
+    except (apt_pkg.Error, Exception) as e:
+        debug("W: apt_pkg.SourceRecords failed for %s: %s" % (name, e))
         return None
     return {"cache": cache, "source_records": src}
 
@@ -328,8 +347,8 @@ def check_versions(tcache, ucache, helper_info, package, release):
         else:
             repo_str = "Ubuntu"
 
-        print("%s missing on %s! Trisquel has version %s"
-              % (package, repo_str, tresult))
+        print(("%s is missing on %s! Was the source for %s renamed? "
+               "Trisquel has version %s.") % (package, repo_str, package, tresult))
     if uresult and not tresult:
         print("Package %s can be upgraded to version %s current %s version is missing"
               % (package, uresult + helper_info['version'], release))
@@ -378,31 +397,44 @@ def check_distro(release):
         debug(package)
         helper_info = get_helper_info(release, package)
 
-        if not helper_info['external']:
-            if not helper_info['backport']:
-                check_versions(cache["trisquel"], cache["ubuntu"],
-                               helper_info, package, release)
-            else:
-                check_versions(cache["trisquel-backports"], cache["ubuntu-backports"],
-                               helper_info, package, release)
-        else:
+        if helper_info['external']:
+            components_field = ' '.join(helper_info['external'].split()[3:])
+            if len(components_field.split()) > 1:
+                tresult = lookup_src(cache["trisquel"], package)
+                print(("%s helper component contains multiple sections, "
+                       "use only one: \"main\" or \"universe\". Trisquel has version %s")
+                      % (package, tresult or "unknown"))
+                continue
+
             # External
             if not helper_info['repokey']:
                 debug("W: helper for %s has external repo but is missing REPOKEY"
                       " defaulting to Ubuntu key: %s" % (package, UBUNTU_REPO_KEY))
                 helper_info['repokey'] = UBUNTU_REPO_KEY
-            suite = helper_info['external'].split()[2]\
-                .replace("$UPSTREAM", TRISQUELRELEASES[release]['upstream'])
-            components = ' '.join(helper_info['external'].split()[3:])
-            cache_external = build_cache(package, helper_info['external'].split()[1],
-                                         [suite], components, release, helper_info['repokey'])
+
+            external_parts = helper_info['external'].split()
+            upstream = TRISQUELRELEASES[release]['upstream']
+            base_suite = external_parts[2].replace("$UPSTREAM", upstream)
+            suites = [base_suite, f"{base_suite}-updates", f"{base_suite}-security"]
+            components = ' '.join(external_parts[3:])
+            uri = external_parts[1]
+            cache_external = build_cache(package, uri, suites, components, release, helper_info['repokey'])
+            if cache_external is None:
+                print("W: Skipping package '%s' due to failed external cache for helper." % package)
+                continue
 
             if helper_info['backport']:
                 check_versions(cache["trisquel-backports"], cache_external,
                                helper_info, package, release)
             else:
                 check_versions(cache["trisquel"], cache_external, helper_info, package, release)
-
+        else:
+            if not helper_info['backport']:
+                check_versions(cache["trisquel"], cache["ubuntu"],
+                               helper_info, package, release)
+            else:
+                check_versions(cache["trisquel-backports"], cache["ubuntu-backports"],
+                               helper_info, package, release)
 
 def setup(desc):
     parser = argparse.ArgumentParser(description=desc)
