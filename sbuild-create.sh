@@ -197,6 +197,8 @@ cat "$DEBIAN_KEYRING_FOLDER"/apt-trusted-asc/*automatic.asc > \
 cat "$DEBIAN_KEYRING_FOLDER"/debian-apt-keyring.asc | gpg --dearmour | \
     tee "$DEBIAN_KEYRING_FOLDER"/debian-apt-keyring.gpg > /dev/null && \
 PRE_BUILD_KEYRING="--keyring=$DEBIAN_KEYRING_FOLDER/debian-apt-keyring.gpg"
+[ "$HOST_OS" = "Trisquel" ] && [ -z "$UPSTREAM" ] && \
+PRE_BUILD_KEYRING="--keyring=$TRISQUEL_KEYRING_FILE"
 
 [ -z "$PRE_BUILD_KEYRING" ] && PRE_BUILD_KEYRING="--verbose"
 debootstrap --arch="$ARCH" \
@@ -204,7 +206,7 @@ debootstrap --arch="$ARCH" \
             --variant=minbase \
             --components=main \
             "$PRE_BUILD_KEYRING" \
-            --include=apt \
+            --include=apt,ca-certificates \
             "$CODENAME" \
             "$SBUILD_CREATE_DIR" \
             "$REPO" \
@@ -229,10 +231,19 @@ fi
 
 #Add gpg key via gpg server to keyring storage.
 add_gpg_keyring() {
-apt-key adv --recv-keys --keyserver keyserver.ubuntu.com \$1
-apt-key export \$1 | gpg --dearmour | tee /tmp/\$1.gpg >/dev/null
-apt-key del \$1
-mv /tmp/\$1.gpg /etc/apt/trusted.gpg.d/
+# Set custom GPG env.
+  export GNUPGHOME="/tmp/gnupg-keys"
+  rm -rf -- \$GNUPGHOME
+  install -d -m 0700 \$GNUPGHOME
+
+  gpg --batch --keyserver hkps://keyserver.ubuntu.com --recv-keys "0x\${1}"
+  gpg --batch --export-options export-minimal --export "0x\${1}" \
+    | tee /etc/apt/trusted.gpg.d/\${1}.gpg >/dev/null
+  chmod 0644 /etc/apt/trusted.gpg.d/\${1}.gpg
+  gpg --batch --with-fingerprint --list-keys "0x\${1}" | sed 's/^/[#] /'
+# GPG cleaning
+  gpgconf --kill all
+  rm -rf -- \$GNUPGHOME
 }
 add_sbuild_keys() {
 # Reload package lists
@@ -258,7 +269,7 @@ echo "force-unsafe-io" > /etc/dpkg/dpkg.cfg.d/force-unsafe-io
 
 mkdir -p /home/jenkins/.gnupg
 echo "no-use-agent" > /home/jenkins/.gnupg/gpg.conf
-chown 1007.1008 -R /home/jenkins
+chown 1007:1008 -R /home/jenkins
 
 #Add keys to trisquel schroot
 if [ -z "$UPSTREAM" ]; then
