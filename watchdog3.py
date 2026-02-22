@@ -24,6 +24,7 @@ import subprocess
 import apt_pkg
 import apt
 import urllib.error
+import re
 
 # Workaround for T12: redirect python-apt warnings flood to a log file
 # due to changes at 2.7.3 'Actually register apt_pkg.Warning object' so
@@ -298,7 +299,7 @@ def compare_versions(helper_info, tresult, uresult, package, release, cache):
                 if "trisquel" not in result:
                     print(("E: Skipping building %s, "
                            "binary package exists but has no trisquel version") % package)
-                    return
+                    return True
                 debug("Upstream version of %s: %s" % (basepackage, result))
                 abi_upstream = '-'.join(uresult.replace(".", "-").split("-")[:2])
                 abi_base = '-'.join(result.replace(".", "-").split("-")[:2])
@@ -307,10 +308,10 @@ def compare_versions(helper_info, tresult, uresult, package, release, cache):
                         "W: Skipping building %s, binary package is out of date (%s vs %s)"
                         % (package, abi_upstream, abi_base)
                     )
-                    return
+                    return True
             else:
                 print("W: Skipping building %s, binary package is missing" % package)
-                return
+                return True
         # If dependencies are defined in helper, check that they are built in order
         if helper_info['depends']:
             for dependency in helper_info['depends']:
@@ -325,9 +326,11 @@ def compare_versions(helper_info, tresult, uresult, package, release, cache):
         print(("Package %s can be upgraded to version %s "
                "current %s version is %s")
               % (package, uresult+helper_info['version'], release, tresult))
+        return True
     else:
         debug("%s: Trisquel repo has %s and upstream has %s helper:%s"
               % (package, tresult, uresult, helper_info['version']))
+        return False
 
 
 def check_versions(tcache, ucache, helper_info, package, release):
@@ -353,11 +356,31 @@ def check_versions(tcache, ucache, helper_info, package, release):
         print("Package %s can be upgraded to version %s current %s version is missing"
               % (package, uresult + helper_info['version'], release))
     if tresult and uresult:
-        compare_versions(helper_info, tresult, uresult, package, release, tcache)
-        if uresult not in tresult:
-            print ("> Warning: %s at %s, might be skipping version from %s"
-             % (package,tresult,uresult))
+        has_upgrade = compare_versions(helper_info, tresult, uresult, package, release, tcache)
 
+        if not has_upgrade:
+            if uresult not in tresult:
+                is_manual_tag = False
+
+                # Check if tresult has our manual tag at the end (e.g., ~ubuntu0.13)
+                if "~" in tresult:
+                    # Get the string after the LAST '~' character
+                    manual_tag = tresult.split("~")[-1]
+
+                    # Verify if the upstream Ubuntu version ends with our manual tag
+                    if uresult.endswith(manual_tag):
+                        # Strip the tag from the Ubuntu version to get the clean base part
+                        # (e.g., '1:8.9p1-3ubuntu0.13' -> '1:8.9p1-3')
+                        base_part = uresult[:-len(manual_tag)]
+
+                        # Verify if our Trisquel version starts with that exact base part
+                        if tresult.startswith(base_part):
+                            is_manual_tag = True
+
+                # Only print the warning if it's NOT our manual tag pattern
+                if not is_manual_tag:
+                    print ("> Warning: %s at %s, might be skipping version from %s"
+                           % (package, tresult, uresult))
 
 def check_distro(release):
     """
