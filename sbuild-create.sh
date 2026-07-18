@@ -73,7 +73,7 @@ done
 # Setup variables logic from input.
 #------------------------------------------------
 [ "$ARCH" = "i386"  ] || [ "$ARCH" = "armhf" ] && BITS=32
-[[ "$ARCH" == "*64*" ]] && BITS=64 # riscv64 now applies too.
+[[ "$ARCH" == *64* ]] && BITS=64 # riscv64 now applies too.
 [ "$ARCH" != "amd64" ] && PORTS=true
 [ "$BITS" == "32" ] && EATMYDATA=""
 [ "$ARCH" = "ppc64el" ] && EXTRACTOR="ar"
