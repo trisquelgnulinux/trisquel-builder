@@ -73,8 +73,8 @@ done
 # Setup variables logic from input.
 #------------------------------------------------
 [ "$ARCH" = "i386"  ] || [ "$ARCH" = "armhf" ] && BITS=32
-[ "$ARCH" = "amd64" ] || [ "$ARCH" = "arm64" ] || [ "$ARCH" = "ppc64el" ] && BITS=64
-[ "$ARCH" = "armhf" ] || [ "$ARCH" = "arm64" ] || [ "$ARCH" = "ppc64el" ] && PORTS=true
+[[ "$ARCH" == "*64*" ]] && BITS=64 # riscv64 now applies too.
+[ "$ARCH" != "amd64" ] && PORTS=true
 [ "$BITS" == "32" ] && EATMYDATA=""
 [ "$ARCH" = "ppc64el" ] && EXTRACTOR="ar"
 [ "$CODENAME" == "buster"   ] && UPSTREAM="debian" && VALID=1
@@ -82,6 +82,7 @@ done
 [ "$CODENAME" == "bookworm" ] && UPSTREAM="debian" && VALID=1
 [ "$CODENAME" == "trixie"   ] && UPSTREAM="debian" && VALID=1
 [ "$CODENAME" == "sid"      ] && UPSTREAM="debian" && VALID=1
+[ "$CODENAME" == "xolotl"   ] && UBURELEASE="resolute" &&  VALID=1
 [ "$CODENAME" == "ecne"   ] && UBURELEASE="noble" &&  VALID=1
 [ "$CODENAME" == "aramo"  ] && UBURELEASE="jammy"  && VALID=1
 [ "$CODENAME" == "nabia"  ] && UBURELEASE="focal"  && VALID=1
@@ -413,6 +414,10 @@ chroot "$SBUILD_CREATE_DIR" sed -i 's|^#SR||g' /etc/apt/sources.list
 umount "$SBUILD_CREATE_DIR"/proc
 
 ## Move finished tmpfs chroot to /var/lib/schroot/chroots
+for session_mount in /run/schroot/mount/"$CA_BASE"-*; do
+    [ -d "$session_mount" ] || continue
+    umount -R "$session_mount" 2>/dev/null || umount -Rl "$session_mount" || true
+done
 rm -rf /var/lib/schroot/chroots/"$CA_BASE"
 [ -d /var/lib/schroot/chroots ] || mkdir /var/lib/schroot/chroots
 cp -a "$SBUILD_CREATE_DIR" /var/lib/schroot/chroots/"$CA_BASE"
