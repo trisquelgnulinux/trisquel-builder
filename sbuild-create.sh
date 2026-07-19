@@ -77,16 +77,16 @@ done
 [ "$ARCH" != "amd64" ] && PORTS=true
 [ "$BITS" == "32" ] && EATMYDATA=""
 [ "$ARCH" = "ppc64el" ] && EXTRACTOR="ar"
-[ "$CODENAME" == "buster"   ] && UPSTREAM="debian" && VALID=1
 [ "$CODENAME" == "bullseye" ] && UPSTREAM="debian" && VALID=1
 [ "$CODENAME" == "bookworm" ] && UPSTREAM="debian" && VALID=1
 [ "$CODENAME" == "trixie"   ] && UPSTREAM="debian" && VALID=1
+[ "$CODENAME" == "forky"    ] && UPSTREAM="debian" && VALID=1
 [ "$CODENAME" == "sid"      ] && UPSTREAM="debian" && VALID=1
-[ "$CODENAME" == "xolotl"   ] && UBURELEASE="resolute" &&  VALID=1
-[ "$CODENAME" == "ecne"   ] && UBURELEASE="noble" &&  VALID=1
-[ "$CODENAME" == "aramo"  ] && UBURELEASE="jammy"  && VALID=1
-[ "$CODENAME" == "nabia"  ] && UBURELEASE="focal"  && VALID=1
-[ "$CODENAME" == "etiona" ] && UBURELEASE="bionic" && VALID=1
+[ "$CODENAME" == "xolotl"   ] && UBURELEASE="resolute" && VALID=1 && DEVELOPMENT=1 # Comment/replace to new dev. version.
+[ "$CODENAME" == "ecne"     ] && UBURELEASE="noble" &&  VALID=1
+[ "$CODENAME" == "aramo"    ] && UBURELEASE="jammy"  && VALID=1
+[ "$CODENAME" == "nabia"    ] && UBURELEASE="focal"  && VALID=1
+[ "$CODENAME" == "etiona"   ] && UBURELEASE="bionic" && VALID=1
 "$PORTS" && UBUSRC=http://ports.ubuntu.com/
 
 if [ "$VALID" != 1 ]; then
@@ -375,8 +375,9 @@ if [ "$UPSTREAM" = "debian" ];then
         } > "$SBUILD_CREATE_DIR"/etc/apt/sources.list
     fi
     if [ "$CODENAME" = "bullseye" ] || \
+       [ "$CODENAME" = "bookworm" ] || \
        [ "$CODENAME" = "trixie" ] || \
-       [ "$CODENAME" = "bookworm" ]; then
+       [ "$CODENAME" = "forky" ]; then
         {
         echo "deb $REPO $CODENAME main"
         echo "deb $REPO $CODENAME-updates main"
@@ -385,18 +386,6 @@ if [ "$UPSTREAM" = "debian" ];then
         echo "deb-src $REPO $CODENAME main"
         echo "deb-src $REPO $CODENAME-updates main"
         echo "deb-src $REPO-security $CODENAME-security main"
-        } > "$SBUILD_CREATE_DIR"/etc/apt/sources.list
-    fi
-    if [ "$CODENAME" = "buster" ]; then
-        {
-        echo "deb $REPO $CODENAME main"
-        echo "deb $REPO $CODENAME-updates main"
-        echo "deb http://security.debian.org/debian-security $CODENAME/updates main"
-        echo ""
-        echo "deb-src $REPO $CODENAME main"
-        echo "deb-src $REPO $CODENAME-updates main"
-        echo "deb-src http://security.debian.org/debian-security $CODENAME/updates main"
-        echo ""
         } > "$SBUILD_CREATE_DIR"/etc/apt/sources.list
     fi
 fi
