@@ -60,7 +60,8 @@ echo "Check for sources enabled repos."
 #------------------------------------------------
 # Setup variables logic from input.
 #------------------------------------------------
-[ "$CODENAME" == "ecne"   ] && UBURELEASE="noble" &&  VALID=1 && DEVELOPMENT=1
+[ "$CODENAME" == "xolotl"   ] && UBURELEASE="resolute" &&  VALID=1 && DEVELOPMENT=1 # Comment development variable
+[ "$CODENAME" == "ecne"   ] && UBURELEASE="noble" &&  VALID=1
 [ "$CODENAME" == "aramo"  ] && UBURELEASE="jammy"  && VALID=1
 [ "$CODENAME" == "nabia"  ] && UBURELEASE="focal"  && VALID=1
 [ "$CODENAME" == "etiona" ] && UBURELEASE="bionic" && VALID=1
